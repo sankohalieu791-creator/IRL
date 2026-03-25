@@ -12,8 +12,15 @@ export default function AuthGuard({
   const router = useRouter()
   const pathname = usePathname()
   const [checking, setChecking] = useState(true)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+
     const user = getUser()
     const admin = isAdmin()
 
@@ -26,9 +33,10 @@ export default function AuthGuard({
     }
 
     setChecking(false)
-  }, [pathname])
+  }, [pathname, mounted])
 
-  if (checking) return null
+  // Show children immediately on iOS PWA to avoid splash screen
+  if (checking && !mounted) return null
 
   return <>{children}</>
 }
