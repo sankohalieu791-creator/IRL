@@ -28,7 +28,11 @@ export default function LoginPage() {
     if (result.error) {
       setError(result.error)
     } else {
-      router.push("/sessions")
+      if (result.role === "admin") {
+        router.push("/admin")
+      } else {
+        router.push("/sessions")
+      }
     }
 
     setLoading(false)
@@ -39,12 +43,18 @@ export default function LoginPage() {
 
       {/* Logo */}
       <div className="mb-10 text-center">
-        <h1 className="text-5xl font-black text-cyan-400 tracking-tight">
-          IRL
-        </h1>
-        <p className="text-zinc-500 text-sm mt-1">
-          In Real Life
-        </p>
+        <div className="flex items-center justify-center gap-1 mb-2">
+          <span className="text-5xl font-black text-white tracking-tighter">IR</span>
+          <span
+            className="text-4xl font-black px-2 py-0.5"
+            style={{
+              background: "#B400FF",
+              color: "#00D4FF",
+              border: "2px solid #00D4FF"
+            }}
+          >L</span>
+        </div>
+        <p className="text-zinc-500 text-sm">In Real Life</p>
       </div>
 
       {/* Tab switcher */}
@@ -52,9 +62,7 @@ export default function LoginPage() {
         <button
           onClick={() => { setIsSignUp(false); setError("") }}
           className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-            !isSignUp
-              ? "bg-cyan-400 text-black"
-              : "text-zinc-400"
+            !isSignUp ? "bg-cyan-400 text-black" : "text-zinc-400"
           }`}
         >
           Login
@@ -62,9 +70,7 @@ export default function LoginPage() {
         <button
           onClick={() => { setIsSignUp(true); setError("") }}
           className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-            isSignUp
-              ? "bg-cyan-400 text-black"
-              : "text-zinc-400"
+            isSignUp ? "bg-cyan-400 text-black" : "text-zinc-400"
           }`}
         >
           Sign Up
@@ -73,7 +79,6 @@ export default function LoginPage() {
 
       {/* Form */}
       <div className="space-y-4">
-
         <div>
           <label className="text-zinc-400 text-xs mb-1.5 block">
             Invite Code
@@ -100,18 +105,19 @@ export default function LoginPage() {
           />
         </div>
 
-        {/* Error */}
         {error && (
           <div className="bg-red-500/20 border border-red-500/40 text-red-400 text-xs px-4 py-3 rounded-xl">
             {error}
           </div>
         )}
 
-        {/* Submit */}
         <button
           onClick={handleSubmit}
           disabled={loading}
-          className="w-full py-3.5 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl text-sm font-bold mt-2 disabled:opacity-50"
+          className="w-full py-3.5 rounded-xl text-sm font-bold mt-2 disabled:opacity-50"
+          style={{
+            background: "linear-gradient(to right, #B400FF, #00D4FF)"
+          }}
         >
           {loading
             ? "Please wait..."
@@ -120,10 +126,8 @@ export default function LoginPage() {
             : "Login"
           }
         </button>
-
       </div>
 
-      {/* Sign up info */}
       {isSignUp && (
         <p className="text-zinc-600 text-xs text-center mt-6">
           Your invite code is provided by your institution.

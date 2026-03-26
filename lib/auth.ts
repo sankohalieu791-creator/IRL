@@ -39,7 +39,7 @@ export async function signUp(code: string, password: string) {
     return { error: `Failed to create account: ${userError.message}` }
   }
 
-  // Auto create leaderboard row starting at 0
+  // Auto create leaderboard row
   const { error: lbError } = await supabase
     .from("leaderboard")
     .insert({
@@ -48,7 +48,6 @@ export async function signUp(code: string, password: string) {
     })
 
   if (lbError) {
-    // Don't block signup if leaderboard insert fails
     console.error("Leaderboard insert failed:", lbError.message)
   }
 
@@ -58,10 +57,13 @@ export async function signUp(code: string, password: string) {
     .update({ used: true })
     .eq("code", code.toUpperCase())
 
-  // Save to localStorage
+  // Save to both localStorage and sessionStorage
   localStorage.setItem("irl_user", invite.user_name)
   localStorage.setItem("irl_school", invite.school)
   localStorage.setItem("irl_role", invite.role)
+  sessionStorage.setItem("irl_user", invite.user_name)
+  sessionStorage.setItem("irl_school", invite.school)
+  sessionStorage.setItem("irl_role", invite.role)
 
   return { success: true, role: invite.role }
 }
@@ -79,27 +81,30 @@ export async function login(code: string, password: string) {
     return { error: "Invalid code or password" }
   }
 
-  // Save to localStorage
+  // Save to both localStorage and sessionStorage
   localStorage.setItem("irl_user", user.user_name)
   localStorage.setItem("irl_school", user.school)
   localStorage.setItem("irl_role", user.role)
+  sessionStorage.setItem("irl_user", user.user_name)
+  sessionStorage.setItem("irl_school", user.school)
+  sessionStorage.setItem("irl_role", user.role)
 
   return { success: true, role: user.role }
 }
 
 export function getUser(): string | null {
   if (typeof window === "undefined") return null
-  return localStorage.getItem("irl_user")
+  return localStorage.getItem("irl_user") || sessionStorage.getItem("irl_user")
 }
 
 export function getSchool(): string | null {
   if (typeof window === "undefined") return null
-  return localStorage.getItem("irl_school")
+  return localStorage.getItem("irl_school") || sessionStorage.getItem("irl_school")
 }
 
 export function getRole(): string | null {
   if (typeof window === "undefined") return null
-  return localStorage.getItem("irl_role")
+  return localStorage.getItem("irl_role") || sessionStorage.getItem("irl_role")
 }
 
 export function isAdmin(): boolean {
@@ -111,4 +116,7 @@ export function logout() {
   localStorage.removeItem("irl_user")
   localStorage.removeItem("irl_school")
   localStorage.removeItem("irl_role")
+  sessionStorage.removeItem("irl_user")
+  sessionStorage.removeItem("irl_school")
+  sessionStorage.removeItem("irl_role")
 }
