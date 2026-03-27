@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { login, signUp } from "@/lib/auth"
 import { supabase } from "@/lib/supabase"
+import bcrypt from "bcryptjs"
 
 type Institution = {
   id: string
@@ -13,10 +13,10 @@ type Institution = {
 
 export default function LoginPage() {
   const router = useRouter()
-  const [isSignUp, setIsSignUp] = useState(false)
-  const [code, setCode] = useState("")
+  const [mode, setMode] = useState<"student-login" | "student-signup" | "admin-login">("student-login")
   const [password, setPassword] = useState("")
   const [username, setUsername] = useState("")
+  const [adminCode, setAdminCode] = useState("")
   const [selectedInstitution, setSelectedInstitution] = useState("")
   const [institutions, setInstitutions] = useState<Institution[]>([])
   const [loading, setLoading] = useState(false)
@@ -40,40 +40,137 @@ export default function LoginPage() {
     i.name.toLowerCase().includes(search.toLowerCase())
   )
 
-  async function handleLogin() {
-    if (!code || !password) {
+  function saveToStorage(userName: string, school: string, role: string) {
+    localStorage.setItem("irl_user", userName)
+    localStorage.setItem("irl_school", school)
+    localStorage.setItem("irl_role", role)
+    sessionStorage.setItem("irl_user", userName)
+    sessionStorage.setItem("irl_school", school)
+    sessionStorage.setItem("irl_role", role)
+    const expires = new Date()
+    expires.setFullYear(expires.getFullYear() + 1)
+    document.cookie = `irl_user=${userName}; expires=${expires.toUTCString()}; path=/`
+    document.cookie = `irl_school=${school}; expires=${expires.toUTCString()}; path=/`
+    document.cookie = `irl_role=${role}; expires=${expires.toUTCString()}; path=/`
+  }
+
+  async function handleStudentLogin() {
+    if (!username || !password) {
       setError("Please fill in all fields")
       return
     }
     setLoading(true)
     setError("")
-    const result = await login(code, password)
-    if (result.error) {
-      setError(result.error)
-    } else {
-      router.push(result.role === "admin" ? "/admin" : "/sessions")
+
+    const { data: user } = await supabase
+      .from("users")
+      .select("*")
+      .eq("user_name", username)
+      .eq("role", "student")
+      .maybeSingle()
+
+    if (!user) {
+      setError("Username not found")
+      setLoading(false)
+      return
     }
+
+    const passwordMatch = await bcrypt.compare(password, user.password)
+    if (!passwordMatch) {
+      setError("Incorrect password")
+      setLoading(false)
+      return
+    }
+
+    saveToStorage(user.user_name, user.school, user.role)
+    router.push("/sessions")
     setLoading(false)
   }
 
-  // ✅ REPLACED handleSignUp FUNCTION
-  async function handleSignUp() {
+  async function handleStudentSignUp() {
     if (!username || !password || !selectedInstitution) {
       setError("Please fill in all fields and select your institution")
+      return
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters")
       return
     }
 
     setLoading(true)
     setError("")
 
-    const result = await signUp("", password, username, selectedInstitution)
+    const { data: existing } = await supabase
+      .from("users")
+      .select("id")
+      .eq("user_name", username)
+      .maybeSingle()
 
-    if (result.error) {
-      setError(result.error)
-    } else {
-      router.push("/sessions")
+    if (existing) {
+      setError("That username is already taken. Please choose another.")
+      setLoading(false)
+      return
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    const { error: userError } = await supabase
+      .from("users")
+      .insert({
+        user_name: username,
+        school: selectedInstitution,
+        institution_name: selectedInstitution,
+        role: "student",
+        code: `IRL-${username.toUpperCase().replace(/\s/g, "")}`,
+        password: hashedPassword
+      })
+
+    if (userError) {
+      setError(`Failed to create account: ${userError.message}`)
+      setLoading(false)
+      return
+    }
+
+    await supabase
+      .from("leaderboard")
+      .insert({ user_name: username, points: 0 })
+
+    saveToStorage(username, selectedInstitution, "student")
+    router.push("/sessions")
+    setLoading(false)
+  }
+
+  async function handleAdminLogin() {
+    if (!adminCode || !password) {
+      setError("Please fill in all fields")
+      return
+    }
+    setLoading(true)
+    setError("")
+
+    const { data: user } = await supabase
+      .from("users")
+      .select("*")
+      .eq("code", adminCode.toUpperCase())
+      .eq("role", "admin")
+      .maybeSingle()
+
+    if (!user) {
+      setError("Invalid admin code")
+      setLoading(false)
+      return
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password)
+    if (!passwordMatch) {
+      setError("Incorrect password")
+      setLoading(false)
+      return
+    }
+
+    saveToStorage(user.user_name, user.school, user.role)
+    router.push("/admin")
     setLoading(false)
   }
 
@@ -93,36 +190,44 @@ export default function LoginPage() {
           <p className="text-zinc-500 text-sm">In Real Life</p>
         </div>
 
-        {/* Tab switcher */}
-        <div className="flex bg-zinc-900 rounded-2xl p-1 mb-6">
+        {/* Mode switcher */}
+        <div className="flex bg-zinc-900 rounded-2xl p-1 mb-6 gap-1">
           <button
-            onClick={() => { setIsSignUp(false); setError("") }}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-              !isSignUp ? "bg-cyan-400 text-black" : "text-zinc-400"
+            onClick={() => { setMode("student-login"); setError("") }}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+              mode === "student-login" ? "bg-cyan-400 text-black" : "text-zinc-400"
             }`}
           >
             Login
           </button>
           <button
-            onClick={() => { setIsSignUp(true); setError("") }}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-              isSignUp ? "bg-cyan-400 text-black" : "text-zinc-400"
+            onClick={() => { setMode("student-signup"); setError("") }}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+              mode === "student-signup" ? "bg-cyan-400 text-black" : "text-zinc-400"
             }`}
           >
             Sign Up
           </button>
+          <button
+            onClick={() => { setMode("admin-login"); setError("") }}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+              mode === "admin-login" ? "bg-purple-500 text-white" : "text-zinc-400"
+            }`}
+          >
+            Admin
+          </button>
         </div>
 
-        {/* LOGIN FORM */}
-        {!isSignUp && (
+        {/* STUDENT LOGIN */}
+        {mode === "student-login" && (
           <div className="space-y-4">
             <div>
-              <label className="text-zinc-400 text-xs mb-1.5 block">Invite Code</label>
+              <label className="text-zinc-400 text-xs mb-1.5 block">Username</label>
               <input
                 type="text"
-                placeholder="e.g. IRL-ABC123"
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="Enter your username"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-400 placeholder:text-zinc-600"
               />
             </div>
@@ -132,7 +237,7 @@ export default function LoginPage() {
                 type="password"
                 placeholder="Enter your password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={e => setPassword(e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-400 placeholder:text-zinc-600"
               />
             </div>
@@ -142,9 +247,9 @@ export default function LoginPage() {
               </div>
             )}
             <button
-              onClick={handleLogin}
+              onClick={handleStudentLogin}
               disabled={loading}
-              className="w-full py-3.5 rounded-xl text-sm font-bold mt-2 disabled:opacity-50 text-white"
+              className="w-full py-3.5 rounded-xl text-sm font-bold disabled:opacity-50 text-white"
               style={{ background: "linear-gradient(to right, #B400FF, #00D4FF)" }}
             >
               {loading ? "Please wait..." : "Login"}
@@ -152,10 +257,139 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* SIGNUP FORM */}
-        {isSignUp && (
+        {/* STUDENT SIGNUP */}
+        {mode === "student-signup" && (
           <div className="space-y-4">
-            {/* ...rest of your signup form untouched... */}
+            {/* Institution picker */}
+            <div>
+              <label className="text-zinc-400 text-xs mb-1.5 block">Your Institution</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search for your school, college or university..."
+                  value={search}
+                  onChange={e => {
+                    setSearch(e.target.value)
+                    setShowDropdown(true)
+                    setSelectedInstitution("")
+                  }}
+                  onFocus={() => setShowDropdown(true)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-400 placeholder:text-zinc-600"
+                />
+                {selectedInstitution && (
+                  <div className="absolute right-3 top-3.5">
+                    <span className="text-cyan-400 text-xs font-bold">✓ Selected</span>
+                  </div>
+                )}
+                {showDropdown && search && filteredInstitutions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 bg-zinc-800 border border-zinc-700 rounded-xl mt-1 max-h-48 overflow-y-auto z-50">
+                    {filteredInstitutions.map(i => (
+                      <button
+                        key={i.id}
+                        onClick={() => {
+                          setSelectedInstitution(i.name)
+                          setSearch(i.name)
+                          setShowDropdown(false)
+                        }}
+                        className="w-full text-left px-4 py-3 text-white text-sm hover:bg-zinc-700 transition-colors border-b border-zinc-700/50 last:border-0"
+                      >
+                        <p className="font-semibold">{i.name}</p>
+                        <p className="text-zinc-500 text-[11px] capitalize">{i.type}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showDropdown && search && filteredInstitutions.length === 0 && (
+                  <div className="absolute top-full left-0 right-0 bg-zinc-800 border border-zinc-700 rounded-xl mt-1 z-50">
+                    <p className="text-zinc-500 text-sm px-4 py-3">
+                      Not found. Ask your admin to register your institution.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Username */}
+            <div>
+              <label className="text-zinc-400 text-xs mb-1.5 block">Choose a Username</label>
+              <input
+                type="text"
+                placeholder="e.g. JohnSmith"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-400 placeholder:text-zinc-600"
+              />
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="text-zinc-400 text-xs mb-1.5 block">Choose a Password</label>
+              <input
+                type="password"
+                placeholder="At least 6 characters"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-400 placeholder:text-zinc-600"
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-500/20 border border-red-500/40 text-red-400 text-xs px-4 py-3 rounded-xl">
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={handleStudentSignUp}
+              disabled={loading}
+              className="w-full py-3.5 rounded-xl text-sm font-bold disabled:opacity-50 text-white"
+              style={{ background: "linear-gradient(to right, #B400FF, #00D4FF)" }}
+            >
+              {loading ? "Creating account..." : "Create Account"}
+            </button>
+
+            <p className="text-zinc-600 text-xs text-center">
+              Can't find your institution? Contact your admin.
+            </p>
+          </div>
+        )}
+
+        {/* ADMIN LOGIN */}
+        {mode === "admin-login" && (
+          <div className="space-y-4">
+            <div>
+              <label className="text-zinc-400 text-xs mb-1.5 block">Admin Code</label>
+              <input
+                type="text"
+                placeholder="e.g. IRL-ADMIN001"
+                value={adminCode}
+                onChange={e => setAdminCode(e.target.value.toUpperCase())}
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-purple-400 placeholder:text-zinc-600"
+              />
+            </div>
+            <div>
+              <label className="text-zinc-400 text-xs mb-1.5 block">Password</label>
+              <input
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-purple-400 placeholder:text-zinc-600"
+              />
+            </div>
+            {error && (
+              <div className="bg-red-500/20 border border-red-500/40 text-red-400 text-xs px-4 py-3 rounded-xl">
+                {error}
+              </div>
+            )}
+            <button
+              onClick={handleAdminLogin}
+              disabled={loading}
+              className="w-full py-3.5 rounded-xl text-sm font-bold disabled:opacity-50 text-white"
+              style={{ background: "linear-gradient(to right, #7B00CC, #B400FF)" }}
+            >
+              {loading ? "Please wait..." : "Admin Login"}
+            </button>
           </div>
         )}
 
