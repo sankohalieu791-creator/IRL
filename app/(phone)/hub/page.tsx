@@ -249,15 +249,18 @@ export default function Hub() {
             }} />
 
             {/* TOP — filters floating over video */}
-            <div style={{
-              position: "absolute",
-              top: 28, left: 0, right: 0,
-              zIndex: 10,
-              padding: "14px 14px 0",
-              display: "flex",
-              alignItems: "center",
-              gap: 6
-            }}>
+<div style={{
+  position: "absolute",
+  top: 0, left: 0, right: 0,
+  zIndex: 10,
+  paddingTop: "28px",  // ADD THIS
+  paddingLeft: "14px",
+  paddingRight: "14px",
+  paddingBottom: "0",
+  display: "flex",
+  alignItems: "center",
+  gap: 6
+}}>
               {/* Type badge */}
               <span style={{
                 background: getTypeGradient(post.session_type),
