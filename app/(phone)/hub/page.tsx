@@ -55,10 +55,13 @@ export default function Hub() {
   }, [])
 
   useEffect(() => {
-    if (!user) return
-    loadPosts()
-    loadTried()
-  }, [filter, user])
+  loadPosts()
+}, [filter])
+
+useEffect(() => {
+  if (!user) return
+  loadTried()
+}, [user])
 
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
