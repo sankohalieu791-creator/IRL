@@ -195,6 +195,7 @@ export default function Hub() {
       background: "#000",
       overflow: "hidden"
     }}>
+
       {showMusicPicker && (
         <div style={{
           position: "absolute", inset: 0, zIndex: 100,
@@ -354,8 +355,8 @@ export default function Hub() {
           overflowY: "scroll",
           scrollSnapType: "y mandatory",
           WebkitOverflowScrolling: "touch" as any,
-          paddingBottom: "200px"
         }}>
+
           {loading && (
             <div style={{
               height: "100%", display: "flex",
@@ -405,13 +406,13 @@ export default function Hub() {
                 overflow: "hidden",
                 display: "block",
                 background: "#000",
-                padding: "0"
+                padding: "0 10px 10px"
               }}
             >
               <div style={{
                 position: "relative",
                 height: "100%",
-                borderRadius: 0,
+                borderRadius: 20,
                 overflow: "hidden",
                 background: "#111"
               }}>
@@ -465,6 +466,18 @@ export default function Hub() {
                     {post.session_type}
                   </span>
 
+                  <p style={{
+                    color: "white", fontWeight: 800, fontSize: 13,
+                    textAlign: "center", flex: 1,
+                    textShadow: "0 1px 6px rgba(0,0,0,1)",
+                    overflow: "hidden",
+                    display: "-webkit-box" as any,
+                    WebkitLineClamp: 2 as any,
+                    WebkitBoxOrient: "vertical" as any,
+                  }}>
+                    {post.session_title}
+                  </p>
+
                   <span style={{
                     background: "rgba(50,50,50,0.85)",
                     color: "white", fontSize: 10, fontWeight: 600,
@@ -507,14 +520,6 @@ export default function Hub() {
                   position: "absolute", bottom: 14, left: 14, right: 14,
                   zIndex: 10
                 }}>
-                  <h2 style={{
-                    color: "white", fontWeight: 800, fontSize: 18,
-                    marginBottom: 12,
-                    textShadow: "0 1px 6px rgba(0,0,0,1)"
-                  }}>
-                    {post.session_title}
-                  </h2>
-
                   <p style={{
                     color: "rgba(255,255,255,0.6)",
                     fontSize: 11, marginBottom: 6
