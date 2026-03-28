@@ -1,398 +1,208 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import bcrypt from "bcryptjs"
+import { getUser } from "@/lib/auth"
+import BottomNav from "@/components/BottomNav"
 
-type Institution = {
+const PIXABAY_KEY = "55201448-489576e0e650dc45c42b8d3ff"
+
+type HubPost = {
   id: string
-  name: string
-  type: string
+  user_name: string
+  school: string
+  session_title: string
+  session_type: string
+  session_category: string
+  media_url: string
+  media_type: string
+  tried_count: number
+  created_at: string
 }
 
-export default function LoginPage() {
+type Filter = "All" | "Challenge" | "Activity" | "Quest"
+
+type Track = {
+  id: number
+  title: string
+  audio: string
+  artist: string
+}
+
+export default function Hub() {
   const router = useRouter()
-  const [mode, setMode] = useState<"student-login" | "student-signup" | "admin-login">("student-login")
-  const [password, setPassword] = useState("")
-  const [username, setUsername] = useState("")
-  const [adminCode, setAdminCode] = useState("")
-  const [selectedInstitution, setSelectedInstitution] = useState("")
-  const [institutions, setInstitutions] = useState<Institution[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const [search, setSearch] = useState("")
-  const [showDropdown, setShowDropdown] = useState(false)
+  const [user, setUser] = useState("")
+  const [posts, setPosts] = useState<HubPost[]>([])
+  const [filter, setFilter] = useState<Filter>("All")
+  const [tried, setTried] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [mutedPosts, setMutedPosts] = useState<{ [key: string]: boolean }>({})
+  const [showMusicPicker, setShowMusicPicker] = useState(false)
+  const [tracks, setTracks] = useState<Track[]>([])
+  const [selectedTrack, setSelectedTrack] = useState<Track | null>(null)
+  const [musicSearch, setMusicSearch] = useState("")
+  const [musicLoading, setMusicLoading] = useState(false)
+  const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({})
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const cardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
+  const observerRef = useRef<IntersectionObserver | null>(null)
 
   useEffect(() => {
-    loadInstitutions()
+    const currentUser = getUser()
+    if (!currentUser) router.replace("/")
+    else setUser(currentUser)
   }, [])
 
-  async function loadInstitutions() {
+  useEffect(() => {
+    if (!user) return
+    loadPosts()
+    loadTried()
+  }, [filter, user])
+
+  useEffect(() => {
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          const postId = entry.target.getAttribute("data-post-id")
+          if (!postId) return
+          const video = videoRefs.current[postId]
+          if (entry.isIntersecting && entry.intersectionRatio > 0.7) {
+            if (video) video.play().catch(() => {})
+          } else {
+            if (video) {
+              video.pause()
+              video.muted = true
+              setMutedPosts(prev => ({ ...prev, [postId]: true }))
+            }
+          }
+        })
+      },
+      { threshold: 0.7 }
+    )
+    return () => observerRef.current?.disconnect()
+  }, [])
+
+  useEffect(() => {
+    Object.entries(cardRefs.current).forEach(([_, el]) => {
+      if (el) observerRef.current?.observe(el)
+    })
+  }, [posts])
+
+  async function loadPosts() {
+    setLoading(true)
+    let query = supabase
+      .from("hub_posts")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50)
+    if (filter !== "All") query = query.eq("session_type", filter)
+    const { data } = await query
+    if (data) setPosts(data)
+    setLoading(false)
+  }
+
+  async function loadTried() {
     const { data } = await supabase
-      .from("institutions")
-      .select("*")
-      .order("name", { ascending: true })
-    if (data) setInstitutions(data)
+      .from("hub_tries")
+      .select("hub_post_id")
+      .eq("user_name", user)
+    if (data) setTried(data.map(t => t.hub_post_id))
   }
 
-  const filteredInstitutions = institutions.filter(i =>
-    i.name.toLowerCase().includes(search.toLowerCase())
-  )
-
-  function saveToStorage(userName: string, school: string, role: string) {
-    localStorage.setItem("irl_user", userName)
-    localStorage.setItem("irl_school", school)
-    localStorage.setItem("irl_role", role)
-    sessionStorage.setItem("irl_user", userName)
-    sessionStorage.setItem("irl_school", school)
-    sessionStorage.setItem("irl_role", role)
-    const expires = new Date()
-    expires.setFullYear(expires.getFullYear() + 1)
-    document.cookie = `irl_user=${userName}; expires=${expires.toUTCString()}; path=/`
-    document.cookie = `irl_school=${school}; expires=${expires.toUTCString()}; path=/`
-    document.cookie = `irl_role=${role}; expires=${expires.toUTCString()}; path=/`
+  async function searchMusic(query: string) {
+    setMusicLoading(true)
+    try {
+      const res = await fetch(
+        `https://pixabay.com/api/music/?key=${PIXABAY_KEY}&q=${encodeURIComponent(query)}&per_page=10`
+      )
+      const data = await res.json()
+      if (data.hits) {
+        setTracks(data.hits.map((h: any) => ({
+          id: h.id,
+          title: h.title,
+          audio: h.audio,
+          artist: h.user
+        })))
+      }
+    } catch (e) {
+      console.error("Music search failed:", e)
+    }
+    setMusicLoading(false)
   }
 
-  async function handleStudentLogin() {
-    if (!username || !password) {
-      setError("Please fill in all fields")
-      return
+  function playTrack(track: Track) {
+    if (audioRef.current) audioRef.current.pause()
+    audioRef.current = new Audio(track.audio)
+    audioRef.current.loop = true
+    audioRef.current.volume = 0.5
+    audioRef.current.play()
+    setSelectedTrack(track)
+    setShowMusicPicker(false)
+  }
+
+  function stopMusic() {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
     }
-    setLoading(true)
-    setError("")
+    setSelectedTrack(null)
+  }
 
-    const { data: user } = await supabase
-      .from("users")
-      .select("*")
-      .eq("user_name", username)
-      .eq("role", "student")
-      .maybeSingle()
-
-    if (!user) {
-      setError("Username not found")
-      setLoading(false)
-      return
-    }
-
-    const passwordMatch = await bcrypt.compare(password, user.password)
-    if (!passwordMatch) {
-      setError("Incorrect password")
-      setLoading(false)
-      return
-    }
-
-    saveToStorage(user.user_name, user.school, user.role)
+  async function handleTryIRL(post: HubPost) {
+    if (tried.includes(post.id)) return
+    await supabase.from("hub_tries").insert({ hub_post_id: post.id, user_name: user })
+    await supabase.from("hub_posts").update({ tried_count: post.tried_count + 1 }).eq("id", post.id)
+    setTried(prev => [...prev, post.id])
+    setPosts(prev => prev.map(p => p.id === post.id ? { ...p, tried_count: p.tried_count + 1 } : p))
     router.push("/sessions")
-    setLoading(false)
   }
 
-  async function handleStudentSignUp() {
-    if (!username || !password || !selectedInstitution) {
-      setError("Please fill in all fields and select your institution")
-      return
+  function toggleMute(postId: string) {
+    const video = videoRefs.current[postId]
+    if (video) {
+      video.muted = !video.muted
+      setMutedPosts(prev => ({ ...prev, [postId]: video.muted }))
     }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters")
-      return
-    }
-
-    setLoading(true)
-    setError("")
-
-    const { data: existing } = await supabase
-      .from("users")
-      .select("id")
-      .eq("user_name", username)
-      .maybeSingle()
-
-    if (existing) {
-      setError("That username is already taken. Please choose another.")
-      setLoading(false)
-      return
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10)
-
-    const { error: userError } = await supabase
-      .from("users")
-      .insert({
-        user_name: username,
-        school: selectedInstitution,
-        institution_name: selectedInstitution,
-        role: "student",
-        code: `IRL-${username.toUpperCase().replace(/\s/g, "")}`,
-        password: hashedPassword
-      })
-
-    if (userError) {
-      setError(`Failed to create account: ${userError.message}`)
-      setLoading(false)
-      return
-    }
-
-    await supabase
-      .from("leaderboard")
-      .insert({ user_name: username, points: 0 })
-
-    saveToStorage(username, selectedInstitution, "student")
-    router.push("/sessions")
-    setLoading(false)
   }
 
-  async function handleAdminLogin() {
-    if (!adminCode || !password) {
-      setError("Please fill in all fields")
-      return
-    }
-    setLoading(true)
-    setError("")
-
-    const { data: user } = await supabase
-      .from("users")
-      .select("*")
-      .eq("code", adminCode.toUpperCase())
-      .eq("role", "admin")
-      .maybeSingle()
-
-    if (!user) {
-      setError("Invalid admin code")
-      setLoading(false)
-      return
-    }
-
-    const passwordMatch = await bcrypt.compare(password, user.password)
-    if (!passwordMatch) {
-      setError("Incorrect password")
-      setLoading(false)
-      return
-    }
-
-    saveToStorage(user.user_name, user.school, user.role)
-    router.push("/admin")
-    setLoading(false)
+  function getTypeColor(type: string) {
+    if (type === "Challenge") return "#1d4ed8"
+    if (type === "Activity") return "#be185d"
+    return "#7c3aed"
   }
+
+  function timeAgo(dateStr: string) {
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const mins = Math.floor(diff / 60000)
+    const hours = Math.floor(diff / 3600000)
+    const days = Math.floor(diff / 86400000)
+    if (mins < 1) return "just now"
+    if (mins < 60) return `${mins}m`
+    if (hours < 24) return `${hours}h`
+    return `${days}d`
+  }
+
+  const filters: Filter[] = ["All", "Challenge", "Activity", "Quest"]
 
   return (
-    <div className="flex flex-col h-full bg-black text-white overflow-y-auto">
-      <div className="flex flex-col justify-center min-h-full px-6 py-10">
-
-        {/* Logo */}
-        <div className="mb-10 text-center">
-          <div className="flex items-center justify-center gap-1 mb-2">
-            <span className="text-5xl font-black text-white tracking-tighter">IR</span>
-            <span className="text-4xl font-black px-2 py-0.5"
-              style={{ background: "#B400FF", color: "#00D4FF", border: "2px solid #00D4FF" }}>
-              L
-            </span>
-          </div>
-          <p className="text-zinc-500 text-sm">In Real Life</p>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "#000", overflow: "hidden" }}>
+      <div style={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0 }}>
+        <div style={{ height: "100%", overflowY: "scroll", scrollSnapType: "y mandatory", WebkitOverflowScrolling: "touch" as any }}>
+          {!loading && posts.map((post) => (
+            <div key={post.id} ref={el => { cardRefs.current[post.id] = el }} data-post-id={post.id} style={{ height: "100%", scrollSnapAlign: "start", position: "relative", overflow: "hidden", background: "#000" }}>
+              {post.media_type === "video" ? (
+                <video ref={el => { videoRefs.current[post.id] = el }} src={post.media_url} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} autoPlay loop muted playsInline />
+              ) : (
+                <img src={post.media_url} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+              )}
+            </div>
+          ))}
         </div>
+      </div>
 
-        {/* Mode switcher */}
-        <div className="flex bg-zinc-900 rounded-2xl p-1 mb-6 gap-1">
-          <button
-            onClick={() => { setMode("student-login"); setError("") }}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
-              mode === "student-login" ? "bg-cyan-400 text-black" : "text-zinc-400"
-            }`}
-          >
-            Login
-          </button>
-          <button
-            onClick={() => { setMode("student-signup"); setError("") }}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
-              mode === "student-signup" ? "bg-cyan-400 text-black" : "text-zinc-400"
-            }`}
-          >
-            Sign Up
-          </button>
-          <button
-            onClick={() => { setMode("admin-login"); setError("") }}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
-              mode === "admin-login" ? "bg-purple-500 text-white" : "text-zinc-400"
-            }`}
-          >
-            Admin
-          </button>
-        </div>
-
-        {/* STUDENT LOGIN */}
-        {mode === "student-login" && (
-          <div className="space-y-4">
-            <div>
-              <label className="text-zinc-400 text-xs mb-1.5 block">Username</label>
-              <input
-                type="text"
-                placeholder="Enter your username"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-400 placeholder:text-zinc-600"
-              />
-            </div>
-            <div>
-              <label className="text-zinc-400 text-xs mb-1.5 block">Password</label>
-              <input
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-400 placeholder:text-zinc-600"
-              />
-            </div>
-            {error && (
-              <div className="bg-red-500/20 border border-red-500/40 text-red-400 text-xs px-4 py-3 rounded-xl">
-                {error}
-              </div>
-            )}
-            <button
-              onClick={handleStudentLogin}
-              disabled={loading}
-              className="w-full py-3.5 rounded-xl text-sm font-bold disabled:opacity-50 text-white"
-              style={{ background: "linear-gradient(to right, #B400FF, #00D4FF)" }}
-            >
-              {loading ? "Please wait..." : "Login"}
-            </button>
-          </div>
-        )}
-
-        {/* STUDENT SIGNUP */}
-        {mode === "student-signup" && (
-          <div className="space-y-4">
-            {/* Institution picker */}
-            <div>
-              <label className="text-zinc-400 text-xs mb-1.5 block">Your Institution</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search for your school, college or university..."
-                  value={search}
-                  onChange={e => {
-                    setSearch(e.target.value)
-                    setShowDropdown(true)
-                    setSelectedInstitution("")
-                  }}
-                  onFocus={() => setShowDropdown(true)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-400 placeholder:text-zinc-600"
-                />
-                {selectedInstitution && (
-                  <div className="absolute right-3 top-3.5">
-                    <span className="text-cyan-400 text-xs font-bold">✓ Selected</span>
-                  </div>
-                )}
-                {showDropdown && search && filteredInstitutions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 bg-zinc-800 border border-zinc-700 rounded-xl mt-1 max-h-48 overflow-y-auto z-50">
-                    {filteredInstitutions.map(i => (
-                      <button
-                        key={i.id}
-                        onClick={() => {
-                          setSelectedInstitution(i.name)
-                          setSearch(i.name)
-                          setShowDropdown(false)
-                        }}
-                        className="w-full text-left px-4 py-3 text-white text-sm hover:bg-zinc-700 transition-colors border-b border-zinc-700/50 last:border-0"
-                      >
-                        <p className="font-semibold">{i.name}</p>
-                        <p className="text-zinc-500 text-[11px] capitalize">{i.type}</p>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {showDropdown && search && filteredInstitutions.length === 0 && (
-                  <div className="absolute top-full left-0 right-0 bg-zinc-800 border border-zinc-700 rounded-xl mt-1 z-50">
-                    <p className="text-zinc-500 text-sm px-4 py-3">
-                      Not found. Ask your admin to register your institution.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Username */}
-            <div>
-              <label className="text-zinc-400 text-xs mb-1.5 block">Choose a Username</label>
-              <input
-                type="text"
-                placeholder="e.g. JohnSmith"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-400 placeholder:text-zinc-600"
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="text-zinc-400 text-xs mb-1.5 block">Choose a Password</label>
-              <input
-                type="password"
-                placeholder="At least 6 characters"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-cyan-400 placeholder:text-zinc-600"
-              />
-            </div>
-
-            {error && (
-              <div className="bg-red-500/20 border border-red-500/40 text-red-400 text-xs px-4 py-3 rounded-xl">
-                {error}
-              </div>
-            )}
-
-            <button
-              onClick={handleStudentSignUp}
-              disabled={loading}
-              className="w-full py-3.5 rounded-xl text-sm font-bold disabled:opacity-50 text-white"
-              style={{ background: "linear-gradient(to right, #B400FF, #00D4FF)" }}
-            >
-              {loading ? "Creating account..." : "Create Account"}
-            </button>
-
-            <p className="text-zinc-600 text-xs text-center">
-              Can't find your institution? Contact your admin.
-            </p>
-          </div>
-        )}
-
-        {/* ADMIN LOGIN */}
-        {mode === "admin-login" && (
-          <div className="space-y-4">
-            <div>
-              <label className="text-zinc-400 text-xs mb-1.5 block">Admin Code</label>
-              <input
-                type="text"
-                placeholder="e.g. IRL-ADMIN001"
-                value={adminCode}
-                onChange={e => setAdminCode(e.target.value.toUpperCase())}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-purple-400 placeholder:text-zinc-600"
-              />
-            </div>
-            <div>
-              <label className="text-zinc-400 text-xs mb-1.5 block">Password</label>
-              <input
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-purple-400 placeholder:text-zinc-600"
-              />
-            </div>
-            {error && (
-              <div className="bg-red-500/20 border border-red-500/40 text-red-400 text-xs px-4 py-3 rounded-xl">
-                {error}
-              </div>
-            )}
-            <button
-              onClick={handleAdminLogin}
-              disabled={loading}
-              className="w-full py-3.5 rounded-xl text-sm font-bold disabled:opacity-50 text-white"
-              style={{ background: "linear-gradient(to right, #7B00CC, #B400FF)" }}
-            >
-              {loading ? "Please wait..." : "Admin Login"}
-            </button>
-          </div>
-        )}
-
+      <div style={{ flexShrink: 0 }}>
+        <BottomNav />
       </div>
     </div>
   )

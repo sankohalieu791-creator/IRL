@@ -10,9 +10,8 @@ type Tab = "proofs" | "sessions" | "students" | "codes" | "groups" | "institutio
 
 export default function AdminDashboard() {
   const router = useRouter()
-  const ADMIN = getUser() || "Admin"
-  const SCHOOL = getSchool() || "Test School"
-
+  const [ADMIN, setADMIN] = useState("Admin")
+  const [SCHOOL, setSCHOOL] = useState("Test School")
   const [tab, setTab] = useState<Tab>("proofs")
   const [sessions, setSessions] = useState<any[]>([])
   const [newSession, setNewSession] = useState({
@@ -33,7 +32,17 @@ export default function AdminDashboard() {
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
   const [newGroup, setNewGroup] = useState({ name: "", description: "" })
 
-  // Load functions
+  useEffect(() => {
+    const user = getUser()
+    const school = getSchool()
+    if (!user) {
+      router.replace("/login")
+      return
+    }
+    if (user) setADMIN(user)
+    if (school) setSCHOOL(school)
+  }, [])
+
   async function loadSessions() {
     const { data } = await supabase
       .from("sessions")
@@ -139,7 +148,6 @@ export default function AdminDashboard() {
     load()
   }, [tab])
 
-  // Session management
   async function createSession() {
     if (!newSession.title) return alert("Please enter a title")
     const { error } = await supabase
@@ -164,15 +172,7 @@ export default function AdminDashboard() {
       await supabase.from("notifications").insert(notifs)
     }
 
-    setNewSession({
-      title: "",
-      type: "Quest",
-      skill_type: "Open Skill",
-      points: 50,
-      category: "",
-      creator: ADMIN,
-      image: ""
-    })
+    setNewSession({ title: "", type: "Quest", skill_type: "Open Skill", points: 50, category: "", creator: ADMIN, image: "" })
     loadSessions()
     alert("Session created!")
   }
@@ -182,7 +182,6 @@ export default function AdminDashboard() {
     loadSessions()
   }
 
-  // Code management
   function generateRandomCode() {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
     let result = "IRL-"
@@ -197,27 +196,23 @@ export default function AdminDashboard() {
     const code = generateRandomCode()
     const { error } = await supabase
       .from("invite_codes")
-      .insert({
-        code,
-        user_name: newCode.user_name,
-        school: SCHOOL,
-        role: newCode.role,
-        used: false
-      })
+      .insert({ code, user_name: newCode.user_name, school: SCHOOL, role: newCode.role, used: false })
     if (error) return alert(`Error: ${error.message}`)
     setGeneratedCode(code)
     setNewCode({ user_name: "", role: "student" })
     loadCodes()
   }
 
-  // Proof management
   async function updateProofStatus(id: string, status: string, userName: string, sessionId: string) {
     const { error: statusError } = await supabase
       .from("session_attempts")
       .update({ status })
       .eq("id", id)
 
-    if (statusError) return alert(`Error updating status: ${statusError.message}`)
+    if (statusError) {
+      alert(`Error updating status: ${statusError.message}`)
+      return
+    }
 
     if (status === "accepted") {
       const { data: session } = await supabase
@@ -235,18 +230,9 @@ export default function AdminDashboard() {
 
         if (lb) {
           const newPoints = lb.points + session.points
-          const { error: lbError } = await supabase
-            .from("leaderboard")
-            .update({ points: newPoints })
-            .eq("id", lb.id)
-
-          if (lbError) return alert(`Error updating LP: ${lbError.message}`)
+          await supabase.from("leaderboard").update({ points: newPoints }).eq("id", lb.id)
         } else {
-          const { error: insertError } = await supabase
-            .from("leaderboard")
-            .insert({ user_name: userName, points: session.points })
-
-          if (insertError) return alert(`Error creating leaderboard row: ${insertError.message}`)
+          await supabase.from("leaderboard").insert({ user_name: userName, points: session.points })
         }
 
         await supabase.from("notifications").insert({
@@ -256,6 +242,24 @@ export default function AdminDashboard() {
           type: "proof_accepted",
           read: false
         })
+
+        const { data: allUsers } = await supabase
+          .from("leaderboard")
+          .select("user_name, points")
+          .order("points", { ascending: false })
+
+        if (allUsers) {
+          const position = allUsers.findIndex(u => u.user_name === userName) + 1
+          if (position <= 5) {
+            await supabase.from("notifications").insert({
+              user_name: userName,
+              title: `You are ranked #${position}! 🏆`,
+              message: `You just moved into the top 5 on the leaderboard. Keep going!`,
+              type: "leaderboard",
+              read: false
+            })
+          }
+        }
       }
     }
 
@@ -279,17 +283,11 @@ export default function AdminDashboard() {
     alert(`Proof ${status}!`)
   }
 
-  // Group management
   async function createGroup() {
     if (!newGroup.name) return alert("Please enter a group name")
     const { error } = await supabase
       .from("groups")
-      .insert({
-        name: newGroup.name,
-        description: newGroup.description,
-        institution: SCHOOL,
-        total_lp: 0
-      })
+      .insert({ name: newGroup.name, description: newGroup.description, institution: SCHOOL, total_lp: 0 })
     if (error) return alert(`Error: ${error.message}`)
     setNewGroup({ name: "", description: "" })
     loadGroups()
@@ -302,38 +300,35 @@ export default function AdminDashboard() {
   }
 
   async function deleteGroup(id: string) {
+    if (!confirm("Are you sure you want to delete this group?")) return
     await supabase.from("groups").delete().eq("id", id)
     loadGroups()
   }
 
-  // Tabs array
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: "proofs", label: "Proofs", icon: "📎" },
     { key: "sessions", label: "Sessions", icon: "⚡" },
     { key: "students", label: "Students", icon: "👥" },
     { key: "codes", label: "Codes", icon: "🔑" },
-    { key: "groups", label: "Groups", icon: "🏫" },
+    { key: "groups", label: "Groups", icon: "👥" },
     { key: "institutions", label: "Institutions", icon: "🏫" },
   ]
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
-
-      {/* HEADER */}
       <div className="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
         <div>
           <h1 className="text-xl font-bold text-cyan-400">Admin Dashboard</h1>
           <p className="text-zinc-500 text-sm">{SCHOOL}</p>
         </div>
         <button
-          onClick={() => { logout(); router.push("/login") }}
+          onClick={() => { logout(); router.replace("/login") }}
           className="text-sm text-red-400 border border-red-400/30 px-4 py-2 rounded-xl hover:bg-red-400/10 transition-colors"
         >
           Log Out
         </button>
       </div>
 
-      {/* TAB BAR */}
       <div className="bg-zinc-900 border-b border-zinc-800 px-6 flex gap-1 overflow-x-auto">
         {tabs.map(t => (
           <button
@@ -350,12 +345,7 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      {/* CONTENT */}
       <div className="max-w-4xl mx-auto p-6 space-y-6">
-        {/* Existing sections: proofs, sessions, students, codes, groups... */}
-        {/* ... keep all the previous JSX for these tabs unchanged ... */}
-
-        {/* INSTITUTIONS */}
         {tab === "institutions" && (
           <div className="space-y-4">
             <InstitutionsTab school={SCHOOL} />
