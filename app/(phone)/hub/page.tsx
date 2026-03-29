@@ -32,6 +32,10 @@ export default function Hub() {
   const cardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
   const observerRef = useRef<IntersectionObserver | null>(null)
 
+  // Safe zone values
+  const TOP_SAFE = 56  // below the phone status bar + nav
+  const BOTTOM_SAFE = 72 // above the bottom nav
+
   useEffect(() => {
     const currentUser = getUser()
     if (currentUser) setUser(currentUser)
@@ -129,9 +133,6 @@ export default function Hub() {
 
   const filters: Filter[] = ["All", "Challenge", "Activity", "Quest"]
 
-  // Bottom nav height — used to push content above it
-  const NAV_HEIGHT = 60
-
   return (
     <div style={{
       height: "100%",
@@ -142,7 +143,7 @@ export default function Hub() {
       position: "relative"
     }}>
 
-      {/* SCROLL FEED — full screen, sits behind bottom nav */}
+      {/* SCROLL FEED */}
       <div style={{
         flex: 1,
         minHeight: 0,
@@ -203,7 +204,6 @@ export default function Hub() {
             ref={el => { cardRefs.current[post.id] = el }}
             data-post-id={post.id}
             style={{
-              // Full screen — no margins, no padding, no rounded corners
               height: "100%",
               width: "100%",
               scrollSnapAlign: "start",
@@ -215,14 +215,16 @@ export default function Hub() {
               flexShrink: 0
             }}
           >
-            {/* MEDIA — full bleed */}
+            {/* MEDIA — full bleed edge to edge */}
             {post.media_type === "video" ? (
               <video
                 ref={el => { videoRefs.current[post.id] = el }}
                 src={post.media_url}
                 style={{
-                  position: "absolute", inset: 0,
-                  width: "100%", height: "100%",
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
                   objectFit: "cover"
                 }}
                 autoPlay
@@ -234,35 +236,42 @@ export default function Hub() {
               <img
                 src={post.media_url}
                 style={{
-                  position: "absolute", inset: 0,
-                  width: "100%", height: "100%",
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
                   objectFit: "cover"
                 }}
               />
             )}
 
-            {/* GRADIENT — strong at top and bottom */}
+            {/* GRADIENT — top and bottom */}
             <div style={{
-              position: "absolute", inset: 0,
-              background: "linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 30%, transparent 50%, rgba(0,0,0,0.95) 100%)",
+              position: "absolute",
+              inset: 0,
+              background: "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 25%, transparent 55%, rgba(0,0,0,0.95) 100%)",
               zIndex: 1
             }} />
 
-            {/* TOP — filters floating over video */}
+            {/* TOP CONTENT — pushed below status bar into safe zone */}
             <div style={{
               position: "absolute",
-              top: 28, left: 0, right: 0,
+              top: TOP_SAFE,
+              left: 14,
+              right: 14,
               zIndex: 10,
-              padding: "14px 14px 0",
               display: "flex",
               alignItems: "center",
               gap: 6
             }}>
-              {/* Type badge */}
+              {/* Type badge — left */}
               <span style={{
                 background: getTypeGradient(post.session_type),
-                color: "white", fontSize: 10, fontWeight: 800,
-                padding: "5px 12px", borderRadius: 100,
+                color: "white",
+                fontSize: 10,
+                fontWeight: 800,
+                padding: "5px 12px",
+                borderRadius: 100,
                 textTransform: "uppercase" as any,
                 letterSpacing: 1,
                 flexShrink: 0,
@@ -271,14 +280,20 @@ export default function Hub() {
                 {post.session_type}
               </span>
 
-              {/* Filter pills */}
-              <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none" as any }}>
+              {/* Filter pills — center */}
+              <div style={{
+                display: "flex",
+                gap: 5,
+                flex: 1,
+                overflowX: "auto",
+                scrollbarWidth: "none" as any
+              }}>
                 {filters.map(f => (
                   <button
                     key={f}
                     onClick={() => setFilter(f)}
                     style={{
-                      padding: "5px 12px",
+                      padding: "5px 11px",
                       borderRadius: 100,
                       fontSize: 11,
                       fontWeight: 700,
@@ -287,10 +302,12 @@ export default function Hub() {
                       flexShrink: 0,
                       background: filter === f
                         ? "linear-gradient(135deg, #B400FF, #00D4FF)"
-                        : "rgba(0,0,0,0.5)",
-                      color: filter === f ? "white" : "rgba(255,255,255,0.7)",
+                        : "rgba(0,0,0,0.55)",
+                      color: filter === f ? "white" : "rgba(255,255,255,0.75)",
                       backdropFilter: "blur(8px)",
-                      boxShadow: filter === f ? "0 2px 12px rgba(180,0,255,0.4)" : "none"
+                      boxShadow: filter === f
+                        ? "0 2px 12px rgba(180,0,255,0.5)"
+                        : "none"
                     }}
                   >
                     {f}
@@ -302,10 +319,12 @@ export default function Hub() {
               <span style={{
                 background: "rgba(0,0,0,0.55)",
                 backdropFilter: "blur(6px)",
-                color: "white", fontSize: 10, fontWeight: 600,
-                padding: "5px 10px", borderRadius: 100,
-                flexShrink: 0,
-                marginLeft: "auto"
+                color: "white",
+                fontSize: 10,
+                fontWeight: 600,
+                padding: "5px 10px",
+                borderRadius: 100,
+                flexShrink: 0
               }}>
                 {post.session_category}
               </span>
@@ -314,7 +333,7 @@ export default function Hub() {
             {/* BOTTOM CONTENT — pushed above bottom nav */}
             <div style={{
               position: "absolute",
-              bottom: NAV_HEIGHT + 12,
+              bottom: BOTTOM_SAFE,
               left: 14,
               right: 14,
               zIndex: 10
@@ -340,10 +359,10 @@ export default function Hub() {
                 {post.session_title}
               </p>
 
-              {/* TRY IRL + TRIED */}
+              {/* TRY IRL + TRIED COUNT */}
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
 
-                {/* TRY IRL — 65% width */}
+                {/* TRY IRL button — 65% */}
                 <button
                   onClick={() => handleTryIRL(post)}
                   disabled={tried.includes(post.id)}
@@ -380,7 +399,7 @@ export default function Hub() {
                   )}
                 </button>
 
-                {/* TRIED COUNT */}
+                {/* TRIED COUNT pill */}
                 <div style={{
                   flex: 1,
                   background: "rgba(39,39,42,0.85)",
