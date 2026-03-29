@@ -141,19 +141,15 @@ export default function Hub() {
       position: "relative"
     }}>
 
-      {/* FIXED HEADER — floats on top */}
+      {/* HEADER — regular, NOT fixed */}
       <div style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 50,
+        flexShrink: 0,
         background: "#000",
         paddingTop: "12px",
         paddingBottom: "12px",
         paddingLeft: "16px",
         paddingRight: "16px",
-        borderBottom: "none"
+        borderBottom: "1px solid rgba(255,255,255,0.1)"
       }}>
         <h1 style={{
           color: "#00D4FF",
@@ -195,14 +191,13 @@ export default function Hub() {
         </div>
       </div>
 
-      {/* SCROLL FEED — full screen, no margin */}
+      {/* SCROLL FEED — full screen below header */}
       <div style={{
         flex: 1,
         minHeight: 0,
         overflowY: "scroll",
         scrollSnapType: "y mandatory",
-        WebkitOverflowScrolling: "touch" as any,
-        marginTop: "0"
+        WebkitOverflowScrolling: "touch" as any
       }}>
 
         {/* LOADING */}
