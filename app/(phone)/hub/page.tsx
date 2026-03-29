@@ -28,10 +28,8 @@ export default function Hub() {
   const [filter, setFilter] = useState<Filter>("All")
   const [tried, setTried] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
-  const [mutedPosts, setMutedPosts] = useState<{ [key: string]: boolean }>({})
-
-  const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({})
-  const cardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
+  const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({})
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const observerRef = useRef<IntersectionObserver | null>(null)
 
   useEffect(() => {
@@ -44,23 +42,28 @@ export default function Hub() {
   }, [filter])
 
   useEffect(() => {
-    if (!user) return
-    loadTried()
+    if (user) loadTried()
   }, [user])
 
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          const postId = entry.target.getAttribute("data-post-id")
-          if (!postId) return
-          const video = videoRefs.current[postId]
+          const id = entry.target.getAttribute("data-post-id")
+          if (!id) return
+          const vid = videoRefs.current[id]
           if (entry.isIntersecting && entry.intersectionRatio > 0.7) {
-            video?.play().catch(() => {})
-          } else if (video) {
-            video.pause()
-            video.muted = true
-            setMutedPosts((prev) => ({ ...prev, [postId]: true }))
+            if (vid) {
+              vid.muted = false
+              vid.play().catch(() => {
+                vid.muted = true
+                vid.play().catch(() => {})
+              })
+            }
+          } else if (vid) {
+            vid.pause()
+            vid.currentTime = 0
+            vid.muted = true
           }
         })
       },
@@ -100,61 +103,58 @@ export default function Hub() {
     if (tried.includes(post.id)) return
     await supabase.from("hub_tries").insert({ hub_post_id: post.id, user_name: user })
     await supabase.from("hub_posts").update({ tried_count: post.tried_count + 1 }).eq("id", post.id)
-    setTried((prev) => [...prev, post.id])
-    setPosts((prev) =>
-      prev.map((p) => (p.id === post.id ? { ...p, tried_count: p.tried_count + 1 } : p))
-    )
+    setTried((p) => [...p, post.id])
+    setPosts((p) => p.map((x) => (x.id === post.id ? { ...x, tried_count: x.tried_count + 1 } : x)))
     router.push("/sessions")
   }
 
-  function toggleMute(postId: string) {
-    const video = videoRefs.current[postId]
-    if (video) {
-      video.muted = !video.muted
-      setMutedPosts((prev) => ({ ...prev, [postId]: video.muted }))
-    }
-  }
-
-  function getTypeGradient(type: string) {
-    if (type === "Challenge") return "linear-gradient(135deg, #7c3aed, #B400FF)"
-    if (type === "Activity") return "linear-gradient(135deg, #be185d, #ec4899)"
-    return "linear-gradient(135deg, #1d4ed8, #3b82f6)"
-  }
-
-  function timeAgo(dateStr: string) {
-    const diff = Date.now() - new Date(dateStr).getTime()
-    const mins = Math.floor(diff / 60000)
-    const hours = Math.floor(diff / 3600000)
+  const timeAgo = (d: string) => {
+    const diff = Date.now() - new Date(d).getTime()
+    const m = Math.floor(diff / 60000)
+    const h = Math.floor(diff / 3600000)
     const days = Math.floor(diff / 86400000)
-    if (mins < 1) return "just now"
-    if (mins < 60) return `${mins}m`
-    if (hours < 24) return `${hours}h`
+    if (m < 1) return "just now"
+    if (m < 60) return `${m}m`
+    if (h < 24) return `${h}h`
     return `${days}d`
   }
+
+  const getTypeGradient = (t: string) =>
+    t === "Challenge"
+      ? "linear-gradient(135deg,#7c3aed,#B400FF)"
+      : t === "Activity"
+      ? "linear-gradient(135deg,#be185d,#ec4899)"
+      : "linear-gradient(135deg,#1d4ed8,#3b82f6)"
 
   const filters: Filter[] = ["All", "Challenge", "Activity", "Quest"]
 
   return (
-    <div style={{ height: "100vh", overflow: "hidden", background: "#000", position: "relative" }}>
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 30,
-          padding: "12px 16px 8px",
-          background: "linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-        }}
-      >
-        <span style={{ color: "#00D4FF", fontWeight: 800, fontSize: 20, letterSpacing: -0.5 }}>
+    <div style={{
+      height: "100%",
+      overflow: "hidden",
+      background: "#000",
+      position: "relative",
+      display: "flex",
+      flexDirection: "column"
+    }}>
+
+      {/* TOP NAV — floats over feed */}
+      <div style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 30,
+        padding: "12px 16px 10px",
+        background: "linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%)",
+        display: "flex",
+        alignItems: "center",
+        gap: 10
+      }}>
+        <span style={{ color: "#00D4FF", fontWeight: 800, fontSize: 20, flexShrink: 0 }}>
           Hub
         </span>
-
-        <div style={{ display: "flex", gap: 6, overflowX: "auto", flex: 1, scrollbarWidth: "none" }}>
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", flex: 1, scrollbarWidth: "none" as any }}>
           {filters.map((f) => (
             <button
               key={f}
@@ -168,10 +168,10 @@ export default function Hub() {
                 cursor: "pointer",
                 flexShrink: 0,
                 background: filter === f
-                  ? "linear-gradient(135deg, #B400FF, #00D4FF)"
+                  ? "linear-gradient(135deg,#B400FF,#00D4FF)"
                   : "rgba(255,255,255,0.15)",
                 color: filter === f ? "white" : "#ddd",
-                backdropFilter: "blur(8px)",
+                boxShadow: filter === f ? "0 2px 12px rgba(180,0,255,0.4)" : "none"
               }}
             >
               {f}
@@ -180,147 +180,253 @@ export default function Hub() {
         </div>
       </div>
 
-      <div
-        style={{
-          height: "100vh",
-          overflowY: "scroll",
-          scrollSnapType: "y mandatory",
-          WebkitOverflowScrolling: "touch",
-        }}
-      >
+      {/* FEED */}
+      <div style={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: "scroll",
+        scrollSnapType: "y mandatory",
+        WebkitOverflowScrolling: "touch" as any
+      }}>
+
+        {/* LOADING */}
         {loading && (
-          <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}>
             <p style={{ color: "#52525b", fontSize: 13 }}>Loading Hub...</p>
           </div>
         )}
 
-        {!loading &&
-          posts.map((post) => (
-            <div
-              key={post.id}
-              ref={(el) => {
-                cardRefs.current[post.id] = el
-              }}
-              data-post-id={post.id}
+        {/* EMPTY */}
+        {!loading && posts.length === 0 && (
+          <div style={{
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0 32px",
+            textAlign: "center"
+          }}>
+            <p style={{ fontSize: 48, marginBottom: 16 }}>🌍</p>
+            <p style={{ color: "white", fontWeight: 700, fontSize: 16, marginBottom: 8 }}>
+              Hub is empty
+            </p>
+            <p style={{ color: "#52525b", fontSize: 13, marginBottom: 24 }}>
+              Complete a session and share it to be first!
+            </p>
+            <button
+              onClick={() => router.push("/sessions")}
               style={{
-                height: "100vh",
-                scrollSnapAlign: "start",
-                scrollSnapStop: "always",
-                position: "relative",
-                overflow: "hidden",
-                background: "#000",
+                padding: "12px 24px",
+                background: "linear-gradient(to right,#B400FF,#00D4FF)",
+                borderRadius: 12,
+                color: "white",
+                fontWeight: 700,
+                fontSize: 13,
+                border: "none",
+                cursor: "pointer"
               }}
             >
-              {post.media_type === "video" ? (
-                <video
-                  ref={(el) => {
-                    videoRefs.current[post.id] = el
-                  }}
-                  src={post.media_url}
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                  }}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                />
-              ) : (
-                <img
-                  src={post.media_url}
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                  }}
-                  alt=""
-                />
-              )}
+              ⚡ Go Complete a Session
+            </button>
+          </div>
+        )}
 
-              <div
+        {/* CARDS */}
+        {!loading && posts.map((post) => (
+          <div
+            key={post.id}
+            ref={(el) => { cardRefs.current[post.id] = el }}
+            data-post-id={post.id}
+            style={{
+              height: "100%",
+              scrollSnapAlign: "start",
+              scrollSnapStop: "always",
+              position: "relative",
+              overflow: "hidden",
+              background: "#000"
+            }}
+          >
+            {/* MEDIA */}
+            {post.media_type === "video" ? (
+              <video
+                ref={(el) => { videoRefs.current[post.id] = el }}
+                src={post.media_url}
+                autoPlay
+                loop
+                muted
+                playsInline
                 style={{
                   position: "absolute",
                   inset: 0,
-                  background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.4) 45%, transparent 70%)",
-                  zIndex: 1,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover"
                 }}
               />
+            ) : (
+              <img
+                src={post.media_url}
+                alt=""
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover"
+                }}
+              />
+            )}
 
-              <div style={{ position: "absolute", bottom: 90, left: 16, right: 16, zIndex: 10 }}>
-                <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginBottom: 12 }}>
-                  {post.user_name} · {post.school} · {timeAgo(post.created_at)}
-                </p>
+            {/* GRADIENT */}
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.2) 40%, transparent 70%, rgba(0,0,0,0.4) 100%)",
+              zIndex: 1
+            }} />
 
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button
-                    onClick={() => handleTryIRL(post)}
-                    disabled={tried.includes(post.id)}
-                    style={{
-                      flex: 1,
-                      padding: "14px 0",
-                      borderRadius: 9999,
-                      fontSize: 15,
-                      fontWeight: 800,
-                      border: "none",
-                      background: tried.includes(post.id)
-                        ? "#27272a"
-                        : "linear-gradient(135deg, #B400FF, #00D4FF)",
-                      color: tried.includes(post.id) ? "#888" : "white",
-                    }}
-                  >
-                    {tried.includes(post.id) ? "✓ Tried IRL" : "TRY IRL"}
-                  </button>
+            {/* TYPE + CATEGORY BADGES */}
+            <div style={{
+              position: "absolute",
+              top: 72,
+              left: 16,
+              right: 16,
+              zIndex: 10,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <span style={{
+                background: getTypeGradient(post.session_type),
+                padding: "6px 14px",
+                borderRadius: 999,
+                color: "white",
+                fontSize: 11,
+                fontWeight: 800,
+                textTransform: "uppercase" as any,
+                letterSpacing: 1,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.5)"
+              }}>
+                {post.session_type}
+              </span>
 
-                  <div
-                    style={{
-                      background: "rgba(39,39,42,0.9)",
-                      borderRadius: 9999,
-                      padding: "14px 18px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      minWidth: 110,
-                    }}
-                  >
-                    👥 <span style={{ fontWeight: 700 }}>{post.tried_count.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
+              <span style={{
+                background: "rgba(0,0,0,0.6)",
+                backdropFilter: "blur(6px)",
+                padding: "6px 12px",
+                borderRadius: 999,
+                color: "white",
+                fontSize: 11,
+                fontWeight: 600
+              }}>
+                {post.session_category}
+              </span>
+            </div>
 
-              {post.media_type === "video" && (
+            {/* BOTTOM CONTENT */}
+            <div style={{
+              position: "absolute",
+              bottom: 80,
+              left: 16,
+              right: 16,
+              zIndex: 10
+            }}>
+              <p style={{
+                color: "rgba(255,255,255,0.65)",
+                fontSize: 12,
+                marginBottom: 4
+              }}>
+                {post.user_name} · {post.school} · {timeAgo(post.created_at)}
+              </p>
+
+              <p style={{
+                color: "white",
+                fontWeight: 800,
+                fontSize: 16,
+                lineHeight: 1.3,
+                marginBottom: 14,
+                textShadow: "0 1px 6px rgba(0,0,0,0.8)"
+              }}>
+                {post.session_title}
+              </p>
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <button
-                  onClick={() => toggleMute(post.id)}
+                  onClick={() => handleTryIRL(post)}
+                  disabled={tried.includes(post.id)}
                   style={{
-                    position: "absolute",
-                    top: 120,
-                    right: 16,
-                    zIndex: 20,
-                    background: "rgba(0,0,0,0.5)",
-                    border: "1px solid rgba(255,255,255,0.3)",
-                    borderRadius: "50%",
-                    width: 36,
-                    height: 36,
+                    flex: "0 0 65%",
+                    padding: "14px 0",
+                    borderRadius: 9999,
+                    border: "none",
+                    fontWeight: 800,
+                    fontSize: 14,
+                    cursor: tried.includes(post.id) ? "default" : "pointer",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    gap: 6,
+                    background: tried.includes(post.id)
+                      ? "#27272a"
+                      : "linear-gradient(135deg,#B400FF,#00D4FF)",
+                    color: tried.includes(post.id) ? "#71717a" : "white",
+                    boxShadow: tried.includes(post.id)
+                      ? "none"
+                      : "0 4px 20px rgba(180,0,255,0.5)"
                   }}
                 >
-                  {mutedPosts[post.id] !== false ? "🔇" : "🔊"}
+                  {tried.includes(post.id) ? (
+                    <>✓ Tried IRL</>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                      </svg>
+                      TRY IRL
+                    </>
+                  )}
                 </button>
-              )}
+
+                <div style={{
+                  flex: 1,
+                  background: "rgba(39,39,42,0.9)",
+                  backdropFilter: "blur(6px)",
+                  borderRadius: 9999,
+                  padding: "14px 0",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 5
+                }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
+                  <span style={{ color: "white", fontSize: 12, fontWeight: 700 }}>
+                    {post.tried_count.toLocaleString()} Tried
+                  </span>
+                </div>
+              </div>
             </div>
-          ))}
+
+          </div>
+        ))}
+
       </div>
 
-      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 30 }}>
+      {/* BOTTOM NAV */}
+      <div style={{ flexShrink: 0 }}>
         <BottomNav />
       </div>
+
     </div>
   )
 }
