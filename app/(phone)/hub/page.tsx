@@ -202,7 +202,7 @@ export default function Hub() {
         overflowY: "scroll",
         scrollSnapType: "y mandatory",
         WebkitOverflowScrolling: "touch" as any,
-        marginTop: "110px"  // Push down below fixed header
+        marginTop: "0"  // Push down below fixed header
       }}>
 
         {/* LOADING */}
