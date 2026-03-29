@@ -25,14 +25,13 @@ export default function Hub() {
   const router = useRouter()
   const [user, setUser] = useState("")
   const [posts, setPosts] = useState<HubPost[]>([])
-  const [filter, setFilter] = useState<Filter>("All")
+  const [activeFilter, setActiveFilter] = useState<Filter>("All")
   const [tried, setTried] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+
   const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({})
   const cardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
   const observerRef = useRef<IntersectionObserver | null>(null)
-
-  const BOTTOM_SAFE = 72
 
   useEffect(() => {
     const currentUser = getUser()
@@ -41,43 +40,37 @@ export default function Hub() {
 
   useEffect(() => {
     loadPosts()
-  }, [filter])
+  }, [activeFilter])
 
   useEffect(() => {
     if (!user) return
     loadTried()
   }, [user])
 
+  // Intersection Observer for video autoplay
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
       (entries) => {
-        entries.forEach(entry => {
+        entries.forEach((entry) => {
           const postId = entry.target.getAttribute("data-post-id")
           if (!postId) return
           const video = videoRefs.current[postId]
           if (entry.isIntersecting && entry.intersectionRatio > 0.7) {
-            if (video) {
-              video.muted = false
-              video.play().catch(() => {
-                video.muted = true
-                video.play().catch(() => {})
-              })
-            }
+            video?.play().catch(() => {})
           } else {
-            if (video) {
-              video.pause()
-              video.currentTime = 0
-            }
+            video?.pause()
+            if (video) video.currentTime = 0
           }
         })
       },
       { threshold: 0.7 }
     )
+
     return () => observerRef.current?.disconnect()
   }, [])
 
   useEffect(() => {
-    Object.entries(cardRefs.current).forEach(([_, el]) => {
+    Object.values(cardRefs.current).forEach((el) => {
       if (el) observerRef.current?.observe(el)
     })
   }, [posts])
@@ -89,7 +82,11 @@ export default function Hub() {
       .select("*")
       .order("created_at", { ascending: false })
       .limit(50)
-    if (filter !== "All") query = query.eq("session_type", filter)
+
+    if (activeFilter !== "All") {
+      query = query.eq("session_type", activeFilter)
+    }
+
     const { data } = await query
     if (data) setPosts(data)
     setLoading(false)
@@ -100,15 +97,24 @@ export default function Hub() {
       .from("hub_tries")
       .select("hub_post_id")
       .eq("user_name", user)
-    if (data) setTried(data.map(t => t.hub_post_id))
+    if (data) setTried(data.map((t) => t.hub_post_id))
   }
 
   async function handleTryIRL(post: HubPost) {
     if (tried.includes(post.id)) return
+
     await supabase.from("hub_tries").insert({ hub_post_id: post.id, user_name: user })
-    await supabase.from("hub_posts").update({ tried_count: post.tried_count + 1 }).eq("id", post.id)
-    setTried(prev => [...prev, post.id])
-    setPosts(prev => prev.map(p => p.id === post.id ? { ...p, tried_count: p.tried_count + 1 } : p))
+    await supabase
+      .from("hub_posts")
+      .update({ tried_count: post.tried_count + 1 })
+      .eq("id", post.id)
+
+    setTried((prev) => [...prev, post.id])
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === post.id ? { ...p, tried_count: p.tried_count + 1 } : p
+      )
+    )
     router.push("/sessions")
   }
 
@@ -132,58 +138,24 @@ export default function Hub() {
   const filters: Filter[] = ["All", "Challenge", "Activity", "Quest"]
 
   return (
-    <div style={{
-      height: "100%",
-      display: "flex",
-      flexDirection: "column",
-      background: "#000",
-      overflow: "hidden",
-      position: "relative"
-    }}>
+    <div className="h-screen flex flex-col bg-black overflow-hidden">
+      {/* FIXED TOP NAV - exactly like your first screenshot */}
+      <div className="flex-shrink-0 pt-2 pb-3 px-4 bg-black border-b border-zinc-900 z-50">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-2xl font-bold text-white">Hub</div>
+        </div>
 
-      {/* HEADER — regular, NOT fixed */}
-      <div style={{
-        flexShrink: 0,
-        background: "#000",
-        paddingTop: "12px",
-        paddingBottom: "12px",
-        paddingLeft: "16px",
-        paddingRight: "16px",
-        borderBottom: "1px solid rgba(255,255,255,0.1)"
-      }}>
-        <h1 style={{
-          color: "#00D4FF",
-          fontWeight: 800,
-          fontSize: 20,
-          marginBottom: 12,
-          letterSpacing: -0.5
-        }}>
-          Hub
-        </h1>
-        <div style={{
-          display: "flex",
-          gap: 6,
-          overflowX: "auto",
-          scrollbarWidth: "none" as any
-        }}>
-          {filters.map(f => (
+        {/* Tab pills - All, Challenge, Activities, Quest */}
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          {filters.map((f) => (
             <button
               key={f}
-              onClick={() => setFilter(f)}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 100,
-                fontSize: 12,
-                fontWeight: 700,
-                border: "none",
-                cursor: "pointer",
-                flexShrink: 0,
-                background: filter === f
-                  ? "linear-gradient(135deg, #B400FF, #00D4FF)"
-                  : "#27272a",
-                color: filter === f ? "white" : "#a1a1aa",
-                boxShadow: filter === f ? "0 2px 12px rgba(180,0,255,0.4)" : "none"
-              }}
+              onClick={() => setActiveFilter(f)}
+              className={`px-5 py-1.5 text-sm font-semibold rounded-full whitespace-nowrap transition-all ${
+                activeFilter === f
+                  ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/50"
+                  : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800"
+              }`}
             >
               {f}
             </button>
@@ -191,260 +163,132 @@ export default function Hub() {
         </div>
       </div>
 
-      {/* SCROLL FEED — full screen below header */}
-      <div style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "scroll",
-        scrollSnapType: "y mandatory",
-        WebkitOverflowScrolling: "touch" as any
-      }}>
-
-        {/* LOADING */}
+      {/* FULL SCREEN SCROLL FEED */}
+      <div
+        className="flex-1 overflow-y-scroll snap-y snap-mandatory scroll-smooth"
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
         {loading && (
-          <div style={{
-            height: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}>
-            <p style={{ color: "#52525b", fontSize: 13 }}>Loading Hub...</p>
+          <div className="h-full flex items-center justify-center">
+            <p className="text-zinc-500 text-sm">Loading Hub...</p>
           </div>
         )}
 
-        {/* EMPTY */}
         {!loading && posts.length === 0 && (
-          <div style={{
-            height: "100%",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "0 32px",
-            textAlign: "center"
-          }}>
-            <p style={{ fontSize: 48, marginBottom: 16 }}>🌍</p>
-            <p style={{ color: "white", fontWeight: 700, fontSize: 16, marginBottom: 8 }}>
-              Hub is empty
-            </p>
-            <p style={{ color: "#52525b", fontSize: 13, marginBottom: 24 }}>
+          <div className="h-full flex flex-col items-center justify-center px-8 text-center">
+            <p className="text-6xl mb-4">🌍</p>
+            <p className="text-white font-bold text-lg mb-2">Hub is empty</p>
+            <p className="text-zinc-500 text-sm mb-8">
               Complete a session and share it to be first!
             </p>
             <button
               onClick={() => router.push("/sessions")}
-              style={{
-                padding: "12px 24px",
-                background: "linear-gradient(to right, #B400FF, #00D4FF)",
-                borderRadius: 12, color: "white",
-                fontWeight: 700, fontSize: 13,
-                border: "none", cursor: "pointer"
-              }}
+              className="px-8 py-3 bg-gradient-to-r from-violet-600 to-cyan-400 rounded-2xl font-bold text-white"
             >
               ⚡ Go Complete a Session
             </button>
           </div>
         )}
 
-        {/* CARDS */}
-        {!loading && posts.map((post) => (
-          <div
-            key={post.id}
-            ref={el => { cardRefs.current[post.id] = el }}
-            data-post-id={post.id}
-            style={{
-              height: "100%",
-              width: "100%",
-              scrollSnapAlign: "start",
-              scrollSnapStop: "always",
-              position: "relative",
-              overflow: "hidden",
-              display: "block",
-              background: "#000",
-              flexShrink: 0
-            }}
-          >
-            {/* MEDIA — full bleed */}
-            {post.media_type === "video" ? (
-              <video
-                ref={el => { videoRefs.current[post.id] = el }}
-                src={post.media_url}
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover"
-                }}
-                autoPlay
-                loop
-                muted
-                playsInline
-              />
-            ) : (
-              <img
-                src={post.media_url}
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover"
-                }}
-              />
-            )}
+        {!loading &&
+          posts.map((post) => (
+            <div
+              key={post.id}
+              ref={(el) => { cardRefs.current[post.id] = el }}
+              data-post-id={post.id}
+              className="h-screen w-full relative flex-shrink-0 snap-start bg-black overflow-hidden"
+            >
+              {/* MEDIA - full bleed */}
+              {post.media_type === "video" ? (
+                <video
+                  ref={(el) => { videoRefs.current[post.id] = el }}
+                  src={post.media_url}
+                  className="absolute inset-0 w-full h-full object-cover"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                />
+              ) : (
+                <img
+                  src={post.media_url}
+                  className="absolute inset-0 w-full h-full object-cover"
+                  alt={post.session_title}
+                />
+              )}
 
-            {/* GRADIENT */}
-            <div style={{
-              position: "absolute",
-              inset: 0,
-              background: "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 25%, transparent 55%, rgba(0,0,0,0.95) 100%)",
-              zIndex: 1
-            }} />
+              {/* Overlay gradient */}
+              <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/90" />
 
-            {/* TOP CONTENT */}
-            <div style={{
-              position: "absolute",
-              top: 14,
-              left: 14,
-              right: 14,
-              zIndex: 10,
-              display: "flex",
-              alignItems: "center",
-              gap: 6
-            }}>
-              {/* Type badge */}
-              <span style={{
-                background: getTypeGradient(post.session_type),
-                color: "white",
-                fontSize: 10,
-                fontWeight: 800,
-                padding: "5px 12px",
-                borderRadius: 100,
-                textTransform: "uppercase" as any,
-                letterSpacing: 1,
-                flexShrink: 0,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.5)"
-              }}>
-                {post.session_type}
-              </span>
-
-              {/* Category badge — right */}
-              <span style={{
-                background: "rgba(0,0,0,0.55)",
-                backdropFilter: "blur(6px)",
-                color: "white",
-                fontSize: 10,
-                fontWeight: 600,
-                padding: "5px 10px",
-                borderRadius: 100,
-                flexShrink: 0,
-                marginLeft: "auto"
-              }}>
-                {post.session_category}
-              </span>
-            </div>
-
-            {/* BOTTOM CONTENT */}
-            <div style={{
-              position: "absolute",
-              bottom: BOTTOM_SAFE,
-              left: 14,
-              right: 14,
-              zIndex: 10
-            }}>
-              {/* Username + school + time */}
-              <p style={{
-                color: "rgba(255,255,255,0.65)",
-                fontSize: 11,
-                marginBottom: 4
-              }}>
-                {post.user_name} · {post.school} · {timeAgo(post.created_at)}
-              </p>
-
-              {/* Session title */}
-              <p style={{
-                color: "white",
-                fontWeight: 800,
-                fontSize: 15,
-                lineHeight: 1.3,
-                marginBottom: 12,
-                textShadow: "0 1px 6px rgba(0,0,0,0.8)"
-              }}>
-                {post.session_title}
-              </p>
-
-              {/* TRY IRL + TRIED */}
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <button
-                  onClick={() => handleTryIRL(post)}
-                  disabled={tried.includes(post.id)}
-                  style={{
-                    flex: "0 0 65%",
-                    padding: "13px 0",
-                    borderRadius: 100,
-                    fontSize: 14,
-                    fontWeight: 800,
-                    border: "none",
-                    cursor: tried.includes(post.id) ? "default" : "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 6,
-                    background: tried.includes(post.id)
-                      ? "#27272a"
-                      : "linear-gradient(135deg, #B400FF, #00D4FF)",
-                    color: tried.includes(post.id) ? "#71717a" : "white",
-                    boxShadow: tried.includes(post.id)
-                      ? "none"
-                      : "0 4px 20px rgba(180,0,255,0.5)"
-                  }}
+              {/* CHALLENGE BADGE + CATEGORY (top right area) */}
+              <div className="absolute top-6 left-4 right-4 z-10 flex items-center justify-between">
+                <div
+                  className="px-4 py-1 text-xs font-black tracking-widest rounded-full text-white shadow-xl"
+                  style={{ background: getTypeGradient(post.session_type) }}
                 >
-                  {tried.includes(post.id) ? (
-                    <>✓ Tried IRL</>
-                  ) : (
-                    <>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                      </svg>
-                      TRY IRL
-                    </>
-                  )}
-                </button>
+                  {post.session_type.toUpperCase()}
+                </div>
 
-                <div style={{
-                  flex: 1,
-                  background: "rgba(39,39,42,0.85)",
-                  backdropFilter: "blur(6px)",
-                  borderRadius: 100,
-                  padding: "13px 0",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 5
-                }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                    <circle cx="9" cy="7" r="4"/>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                  </svg>
-                  <span style={{ color: "white", fontSize: 11, fontWeight: 700 }}>
-                    {post.tried_count.toLocaleString()} Tried
-                  </span>
+                <div className="px-4 py-1 bg-black/60 backdrop-blur-md text-white text-xs font-semibold rounded-full">
+                  {post.session_category}
+                </div>
+              </div>
+
+              {/* BOTTOM CONTENT */}
+              <div className="absolute bottom-20 left-4 right-4 z-10">
+                <p className="text-zinc-400 text-xs mb-1">
+                  {post.user_name} · {post.school} · {timeAgo(post.created_at)}
+                </p>
+
+                <p className="text-white font-bold text-[17px] leading-tight mb-6 pr-8">
+                  {post.session_title}
+                </p>
+
+                <div className="flex gap-3 items-center">
+                  {/* TRY IRL Button */}
+                  <button
+                    onClick={() => handleTryIRL(post)}
+                    disabled={tried.includes(post.id)}
+                    className={`flex-1 py-4 rounded-full font-bold text-base flex items-center justify-center gap-2 transition-all ${
+                      tried.includes(post.id)
+                        ? "bg-zinc-800 text-zinc-500"
+                        : "bg-gradient-to-r from-violet-600 to-cyan-400 text-white shadow-xl shadow-violet-500/40 active:scale-95"
+                    }`}
+                  >
+                    {tried.includes(post.id) ? (
+                      <>✓ Tried IRL</>
+                    ) : (
+                      <>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                        </svg>
+                        TRY IRL
+                      </>
+                    )}
+                  </button>
+
+                  {/* Tried Count */}
+                  <div className="flex-shrink-0 bg-zinc-900/90 backdrop-blur-md px-6 py-4 rounded-full flex items-center gap-2 border border-white/10">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                    <span className="font-bold text-sm text-white">
+                      {post.tried_count.toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
-
-          </div>
-        ))}
-
+          ))}
       </div>
 
-      {/* BOTTOM NAV */}
-      <div style={{ flexShrink: 0, zIndex: 100 }}>
+      {/* Bottom Navigation */}
+      <div className="flex-shrink-0 z-50 border-t border-zinc-900 bg-black">
         <BottomNav />
       </div>
-
     </div>
   )
 }
