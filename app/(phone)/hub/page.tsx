@@ -141,7 +141,7 @@ export default function Hub() {
       position: "relative"
     }}>
 
-      {/* FIXED HEADER — stays at top */}
+      {/* FIXED HEADER — floats on top */}
       <div style={{
         position: "fixed",
         top: 0,
@@ -195,14 +195,14 @@ export default function Hub() {
         </div>
       </div>
 
-      {/* SCROLL FEED — starts below fixed header */}
+      {/* SCROLL FEED — full screen, no margin */}
       <div style={{
         flex: 1,
         minHeight: 0,
         overflowY: "scroll",
         scrollSnapType: "y mandatory",
         WebkitOverflowScrolling: "touch" as any,
-        marginTop: "0"  // Push down below fixed header
+        marginTop: "0"
       }}>
 
         {/* LOADING */}
@@ -446,7 +446,7 @@ export default function Hub() {
       </div>
 
       {/* BOTTOM NAV */}
-      <div style={{ flexShrink: 0 }}>
+      <div style={{ flexShrink: 0, zIndex: 100 }}>
         <BottomNav />
       </div>
 
