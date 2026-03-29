@@ -33,7 +33,7 @@ export default function Hub() {
   const observerRef = useRef<IntersectionObserver | null>(null)
 
   // Safe zone values
-  const TOP_SAFE = 56  // below the phone status bar + nav
+  const TOP_SAFE = 72  // below the phone status bar + nav
   const BOTTOM_SAFE = 72 // above the bottom nav
 
   useEffect(() => {
