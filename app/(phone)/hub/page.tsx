@@ -153,7 +153,7 @@ export default function Hub() {
         paddingBottom: "12px",
         paddingLeft: "16px",
         paddingRight: "16px",
-        borderBottom: "1px solid rgba(255,255,255,0.1)"
+        borderBottom: "none"
       }}>
         <h1 style={{
           color: "#00D4FF",
