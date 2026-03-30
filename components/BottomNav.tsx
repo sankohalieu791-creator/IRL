@@ -51,7 +51,7 @@ export default function BottomNav() {
 
   return (
     <div className="absolute left-0 right-0 bg-zinc-950/95 border-t border-zinc-800 flex" style={{ 
-      paddingBottom: "env(safe-area-inset-bottom, 8px)",
+      paddingBottom: "env(safe-area-inset-bottom, 0px)",
       bottom: "8px"
     }}>
       {tabs.map(tab => {
