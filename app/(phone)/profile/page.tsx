@@ -31,6 +31,7 @@ export default function Profile() {
   const [editingBio, setEditingBio] = useState(false)
   const [bioInput, setBioInput] = useState("")
   const [selectedPost, setSelectedPost] = useState<HubPost | null>(null)
+  const [isVerified, setIsVerified] = useState(false)
 
   useEffect(() => {
     loadProfile()
@@ -50,7 +51,10 @@ export default function Profile() {
       .select("*", { count: "exact", head: true })
       .eq("user_name", USER)
       .eq("status", "accepted")
-    if (sessions !== null) setSessionCount(sessions)
+    if (sessions !== null) {
+      setSessionCount(sessions)
+      setIsVerified(sessions >= 20)
+    }
 
     const { count: rewards } = await supabase
       .from("user_rewards")
@@ -104,14 +108,12 @@ export default function Profile() {
   return (
     <div className="flex flex-col h-full bg-black text-white overflow-hidden">
 
-      {/* FULLSCREEN POST VIEWER */}
       {selectedPost && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 100,
           background: "#000",
           display: "flex", flexDirection: "column"
         }}>
-          {/* Close button */}
           <button
             onClick={() => setSelectedPost(null)}
             style={{
@@ -125,7 +127,6 @@ export default function Profile() {
             ✕
           </button>
 
-          {/* Media */}
           {selectedPost.media_type === "video" ? (
             <video
               src={selectedPost.media_url}
@@ -142,7 +143,6 @@ export default function Profile() {
             />
           )}
 
-          {/* Post info overlay */}
           <div style={{
             position: "absolute", bottom: 0, left: 0, right: 0,
             padding: "24px 16px",
@@ -170,14 +170,12 @@ export default function Profile() {
 
       <main className="flex-1 overflow-y-auto pb-16">
 
-        {/* PROFILE HEADER */}
         <div style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           padding: "32px 24px 20px"
         }}>
-          {/* Avatar */}
           <div style={{
             width: 88,
             height: 88,
@@ -195,17 +193,38 @@ export default function Profile() {
             {USER.charAt(0).toUpperCase()}
           </div>
 
-          {/* Username */}
-          <p style={{ color: "white", fontWeight: 800, fontSize: 18, marginBottom: 4 }}>
-            {USER}
-          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+            <p style={{ color: "white", fontWeight: 800, fontSize: 18 }}>
+              {USER}
+            </p>
+            {isVerified && (
+              <div style={{
+                background: "linear-gradient(135deg, #B400FF, #00D4FF)",
+                borderRadius: "50%", width: 20, height: 20,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 11, color: "white"
+              }}>
+                ✓
+              </div>
+            )}
+          </div>
 
-          {/* School */}
+          {isVerified && (
+            <div style={{
+              background: "rgba(180,0,255,0.1)",
+              border: "1px solid rgba(180,0,255,0.3)",
+              borderRadius: 100, padding: "4px 16px", marginBottom: 8
+            }}>
+              <span style={{ color: "#B400FF", fontWeight: 700, fontSize: 12 }}>
+                ✓ IRL Verified
+              </span>
+            </div>
+          )}
+
           <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 12 }}>
             {SCHOOL}
           </p>
 
-          {/* LP badge */}
           <div style={{
             background: "rgba(0,212,255,0.1)",
             border: "1px solid rgba(0,212,255,0.3)",
@@ -218,36 +237,29 @@ export default function Profile() {
             </span>
           </div>
 
-          {/* Bio */}
           {editingBio ? (
-            <div style={{ width: "100%", marginBottom: 16 }}>
+            <div style={{ width: "100%", maxWidth: 400, marginBottom: 20 }}>
               <textarea
                 value={bioInput}
                 onChange={e => setBioInput(e.target.value)}
-                placeholder="Write something about yourself..."
-                maxLength={100}
-                rows={2}
                 style={{
-                  width: "100%",
-                  background: "rgba(255,255,255,0.08)",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                  borderRadius: 12,
-                  padding: "10px 14px",
-                  color: "white",
-                  fontSize: 13,
-                  outline: "none",
-                  resize: "none",
-                  boxSizing: "border-box" as any
+                  width: "100%", padding: "12px 16px",
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(0,212,255,0.3)",
+                  borderRadius: 12, color: "white",
+                  fontSize: 13, fontFamily: "inherit",
+                  minHeight: 80, marginBottom: 8, boxSizing: "border-box" as any
                 }}
               />
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <div style={{ display: "flex", gap: 8 }}>
                 <button
                   onClick={saveBio}
                   style={{
-                    flex: 1, padding: "8px 0",
-                    background: "linear-gradient(135deg,#B400FF,#00D4FF)",
-                    border: "none", borderRadius: 10,
-                    color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer"
+                    flex: 1, padding: "10px 16px",
+                    background: "linear-gradient(135deg, #B400FF, #00D4FF)",
+                    border: "none", borderRadius: 8,
+                    color: "white", fontWeight: 700, fontSize: 12,
+                    cursor: "pointer"
                   }}
                 >
                   Save
@@ -255,10 +267,12 @@ export default function Profile() {
                 <button
                   onClick={() => setEditingBio(false)}
                   style={{
-                    flex: 1, padding: "8px 0",
-                    background: "rgba(255,255,255,0.08)",
-                    border: "none", borderRadius: 10,
-                    color: "white", fontSize: 13, cursor: "pointer"
+                    flex: 1, padding: "10px 16px",
+                    background: "rgba(255,255,255,0.1)",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: 8, color: "white",
+                    fontWeight: 700, fontSize: 12,
+                    cursor: "pointer"
                   }}
                 >
                   Cancel
@@ -266,144 +280,113 @@ export default function Profile() {
               </div>
             </div>
           ) : (
-            <p
-              onClick={() => setEditingBio(true)}
-              style={{
-                color: bio ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)",
-                fontSize: 13,
-                textAlign: "center",
-                marginBottom: 16,
-                cursor: "pointer",
-                lineHeight: 1.5
-              }}
-            >
-              {bio || "Tap to add a bio..."}
-            </p>
+            <div style={{ width: "100%", maxWidth: 400, marginBottom: 20 }}>
+              <p style={{
+                color: "rgba(255,255,255,0.7)",
+                fontSize: 13, lineHeight: 1.5,
+                marginBottom: 12, minHeight: 40
+              }}>
+                {bio || "No bio yet"}
+              </p>
+              <button
+                onClick={() => setEditingBio(true)}
+                style={{
+                  width: "100%", padding: "10px 16px",
+                  background: "rgba(0,212,255,0.1)",
+                  border: "1px solid rgba(0,212,255,0.3)",
+                  borderRadius: 8, color: "#00D4FF",
+                  fontWeight: 700, fontSize: 12,
+                  cursor: "pointer"
+                }}
+              >
+                {bio ? "Edit Bio" : "Add Bio"}
+              </button>
+            </div>
           )}
 
-          {/* STATS ROW */}
           <div style={{
-            display: "flex",
-            width: "100%",
-            borderTop: "1px solid rgba(255,255,255,0.08)",
-            borderBottom: "1px solid rgba(255,255,255,0.08)",
-            marginBottom: 4
+            display: "grid", gridTemplateColumns: "1fr 1fr",
+            gap: 12, width: "100%", maxWidth: 400, marginBottom: 24
           }}>
-            {[
-              { val: sessionCount, label: "Sessions" },
-              { val: rewardCount, label: "Rewards" },
-              { val: totalTried, label: "Tried" },
-            ].map((s, i) => (
-              <div key={i} style={{
-                flex: 1,
-                padding: "14px 0",
-                textAlign: "center",
-                borderRight: i < 2 ? "1px solid rgba(255,255,255,0.08)" : "none"
-              }}>
-                <p style={{ color: "white", fontWeight: 800, fontSize: 20 }}>{s.val}</p>
-                <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, marginTop: 2 }}>{s.label}</p>
-              </div>
-            ))}
+            <div style={{
+              background: "rgba(0,212,255,0.05)",
+              border: "1px solid rgba(0,212,255,0.2)",
+              borderRadius: 12, padding: "16px 12px",
+              textAlign: "center"
+            }}>
+              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, marginBottom: 4 }}>
+                Sessions
+              </p>
+              <p style={{ color: "#00D4FF", fontWeight: 800, fontSize: 18 }}>
+                {sessionCount}
+              </p>
+            </div>
+            <div style={{
+              background: "rgba(180,0,255,0.05)",
+              border: "1px solid rgba(180,0,255,0.2)",
+              borderRadius: 12, padding: "16px 12px",
+              textAlign: "center"
+            }}>
+              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, marginBottom: 4 }}>
+                Rewards
+              </p>
+              <p style={{ color: "#B400FF", fontWeight: 800, fontSize: 18 }}>
+                {rewardCount}
+              </p>
+            </div>
           </div>
 
-          {/* Logout button */}
           <button
-            onClick={() => { logout(); router.push("/login") }}
+            onClick={() => logout()}
             style={{
-              width: "100%",
-              padding: "10px 0",
-              marginTop: 12,
-              background: "transparent",
+              padding: "12px 24px",
+              background: "rgba(255,0,0,0.1)",
               border: "1px solid rgba(255,0,0,0.3)",
-              borderRadius: 12,
-              color: "#f87171",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer"
+              borderRadius: 8, color: "#ff6b6b",
+              fontWeight: 700, fontSize: 13,
+              cursor: "pointer", marginBottom: 24
             }}
           >
-            Log Out
+            Logout
           </button>
         </div>
 
-        {/* POSTS GRID */}
-        <div style={{
-          borderTop: "1px solid rgba(255,255,255,0.08)",
-          padding: "16px 0 0"
-        }}>
-          {hubPosts.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 24px" }}>
-              <p style={{ fontSize: 32, marginBottom: 8 }}>🌍</p>
-              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>
-                No posts yet
-              </p>
-              <p style={{ color: "rgba(255,255,255,0.2)", fontSize: 12, marginTop: 4 }}>
-                Complete a session and share to the Hub
-              </p>
-            </div>
-          ) : (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 2
-            }}>
+        {hubPosts.length > 0 && (
+          <div style={{ padding: "0 16px 32px" }}>
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 12, marginBottom: 12, textTransform: "uppercase", letterSpacing: 1, fontWeight: 700 }}>
+              Your Hub Posts
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {hubPosts.map(post => (
                 <div
                   key={post.id}
                   onClick={() => setSelectedPost(post)}
                   style={{
-                    aspectRatio: "9/16",
                     position: "relative",
-                    background: "#111",
-                    cursor: "pointer",
-                    overflow: "hidden"
+                    overflow: "hidden", borderRadius: 12,
+                    aspectRatio: "1 / 1", cursor: "pointer",
+                    background: "#27272a"
                   }}
                 >
-                  {/* Thumbnail */}
                   {post.media_type === "video" ? (
-                    <video
-                      src={post.media_url}
-                      style={{
-                        width: "100%", height: "100%",
-                        objectFit: "cover"
-                      }}
-                      muted
-                      playsInline
-                    />
+                    <video src={post.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : (
-                    <img
-                      src={post.media_url}
-                      style={{
-                        width: "100%", height: "100%",
-                        objectFit: "cover"
-                      }}
-                    />
+                    <img src={post.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   )}
-
-                  {/* Type color bar at top */}
                   <div style={{
-                    position: "absolute", top: 0, left: 0, right: 0,
-                    height: 3,
-                    background: `linear-gradient(135deg, ${getTypeColor(post.session_type)}, #B400FF)`
-                  }} />
-
-                  {/* Tried count overlay */}
-                  <div style={{
-                    position: "absolute", bottom: 4, left: 4,
-                    display: "flex", alignItems: "center", gap: 3
+                    position: "absolute", inset: 0,
+                    background: "rgba(0,0,0,0.4)",
+                    display: "flex", alignItems: "center", justifyContent: "center"
                   }}>
-                    <span style={{
-                      color: "white", fontSize: 10, fontWeight: 700,
-                      textShadow: "0 1px 4px rgba(0,0,0,0.8)"
-                    }}>
-                      👥 {post.tried_count}
-                    </span>
+                    <p style={{ color: "white", fontWeight: 700, fontSize: 12, textAlign: "center" }}>
+                      {post.session_title}
+                    </p>
                   </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
       </main>
 

@@ -337,13 +337,21 @@ export default function Hub() {
               right: 16,
               zIndex: 10
             }}>
-              <p style={{
-                color: "rgba(255,255,255,0.65)",
-                fontSize: 12,
-                marginBottom: 4
-              }}>
-                {post.user_name} · {post.school} · {timeAgo(post.created_at)}
-              </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+  <p
+    onClick={() => router.push(`/user/${post.user_name}`)}
+    style={{
+      color: "rgba(255,255,255,0.65)", fontSize: 12,
+      cursor: "pointer", textDecoration: "underline",
+      textDecorationColor: "rgba(255,255,255,0.2)"
+    }}
+  >
+    {post.user_name}
+  </p>
+  <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>
+    · {post.school} · {timeAgo(post.created_at)}
+  </p>
+</div>
 
               <p style={{
                 color: "white",
