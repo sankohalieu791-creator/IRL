@@ -338,20 +338,40 @@ export default function Hub() {
               zIndex: 10
             }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-  <p
+ <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+  {/* Circle avatar */}
+  <div
     onClick={() => router.push(`/user/${post.user_name}`)}
     style={{
-      color: "rgba(255,255,255,0.65)", fontSize: 12,
-      cursor: "pointer", textDecoration: "underline",
-      textDecorationColor: "rgba(255,255,255,0.2)"
+      width: 32, height: 32, borderRadius: "50%",
+      background: "linear-gradient(135deg, #B400FF, #00D4FF)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: 13, fontWeight: 900, color: "white",
+      flexShrink: 0, cursor: "pointer",
+      border: "2px solid rgba(255,255,255,0.2)"
     }}
   >
-    {post.user_name}
-  </p>
+    {post.user_name.charAt(0).toUpperCase()}
+  </div>
+  <div>
+    <p
+      onClick={() => router.push(`/user/${post.user_name}`)}
+      style={{
+        color: "white", fontSize: 13, fontWeight: 700,
+        cursor: "pointer", lineHeight: 1.2
+      }}
+    >
+      {post.user_name}
+    </p>
+    <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, lineHeight: 1.2 }}>
+      {post.school} · {timeAgo(post.created_at)}
+    </p>
+  </div>
+</div>
   <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>
     · {post.school} · {timeAgo(post.created_at)}
   </p>
-</div>
+</div> 
 
               <p style={{
                 color: "white",
