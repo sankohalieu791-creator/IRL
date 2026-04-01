@@ -146,7 +146,46 @@ export default function Profile() {
   return (
     <div className="flex flex-col h-full bg-black text-white overflow-hidden">
       <main className="flex-1 overflow-y-auto pb-16">
-        {/* rest of your JSX unchanged */}
+
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "32px 24px 20px" }}>
+          <div style={{
+            width: 88, height: 88, borderRadius: "50%",
+            background: "linear-gradient(135deg, #B400FF, #00D4FF)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 36, fontWeight: 900, color: "white",
+            marginBottom: 12, border: getAvatarBorder(), boxShadow: getAvatarGlow()
+          }}>
+            {user ? user.charAt(0).toUpperCase() : "?"}
+          </div>
+
+          <p style={{ color: "white", fontWeight: 800, fontSize: 18 }}>{user}</p>
+          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 12 }}>{school}</p>
+
+          <div style={{
+            background: "rgba(0,212,255,0.1)",
+            border: "1px solid rgba(0,212,255,0.3)",
+            borderRadius: 100, padding: "4px 16px", marginBottom: 16
+          }}>
+            <span style={{ color: "#00D4FF", fontWeight: 700, fontSize: 13 }}>
+              ⚡ {points} LP
+            </span>
+          </div>
+
+          <button
+            onClick={() => { logout(); router.push("/login") }}
+            style={{
+              padding: "10px 24px",
+              background: "rgba(255,0,0,0.1)",
+              border: "1px solid rgba(255,0,0,0.3)",
+              borderRadius: 8, color: "#ff6b6b",
+              fontWeight: 700, fontSize: 13,
+              cursor: "pointer", marginBottom: 8
+            }}
+          >
+            Log Out
+          </button>
+        </div>
+
       </main>
       <BottomNav />
     </div>
