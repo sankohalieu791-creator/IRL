@@ -145,15 +145,9 @@ export default function Profile() {
 
   return (
     <div className="flex flex-col h-full bg-black text-white overflow-hidden">
-      {selectedPost && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "#000", display: "flex", flexDirection: "column" }}>
-          <button onClick={() => setSelectedPost(null)} style={{ position: "absolute", top: 16, left: 16, zIndex: 110, background: "rgba(0,0,0,0.6)", border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "white", fontSize: 18 }}>✕</button>
-          {selectedPost.media_type === "video"
-            ? <video src={selectedPost.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} autoPlay loop playsInline controls />
-            : <img src={selectedPost.media_url} style={{ width: "100%", height: "100%", objectFit: "contain" }} />}
-        </div>
-      )}
-      <main className="flex-1 overflow-y-auto pb-16"></main>
+      <main className="flex-1 overflow-y-auto pb-16">
+        {/* rest of your JSX unchanged */}
+      </main>
       <BottomNav />
     </div>
   )
