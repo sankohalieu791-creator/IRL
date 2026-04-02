@@ -164,6 +164,10 @@ export default function Profile() {
             </div>
           </div>
 
+          <div style={{ background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.3)", borderRadius: 100, padding: "4px 16px", marginBottom: 24 }}>
+            <span style={{ color: "#00D4FF", fontWeight: 700, fontSize: 13 }}>⚡ {points} LP</span>
+          </div>
+
           {editingBio ? (
             <div style={{ width: "100%", maxWidth: 400, marginBottom: 20 }}>
               <textarea value={bioInput} onChange={e => setBioInput(e.target.value)}
@@ -174,11 +178,11 @@ export default function Profile() {
               </div>
             </div>
           ) : (
-            <div style={{ width: "100%", maxWidth: 400, marginBottom: 20 }}>
+            <div style={{ width: "100%", maxWidth: 400, marginBottom: 20, textAlign: "center" }}>
               <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, lineHeight: 1.5, marginBottom: 12, minHeight: 40 }}>
                 {bio || "No bio yet"}
               </p>
-              <button onClick={() => setEditingBio(true)} style={{ width: "100%", padding: "10px 16px", background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.3)", borderRadius: 8, color: "#00D4FF", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+              <button onClick={() => setEditingBio(true)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.7)", fontWeight: 600, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>
                 {bio ? "Edit Bio" : "Add Bio"}
               </button>
             </div>
@@ -202,9 +206,6 @@ export default function Profile() {
                   ) : (
                     <img src={post.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   )}
-                  <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <p style={{ color: "white", fontWeight: 700, fontSize: 12, textAlign: "center" }}>{post.session_title}</p>
-                  </div>
                   <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.7)", padding: "4px 8px", borderRadius: 6, fontSize: 10, color: "rgba(0,212,255,0.8)" }}>
                     👥 {post.tried_count} Tried
                   </div>
