@@ -12,6 +12,7 @@ type HubPost = {
   media_url: string
   media_type: string
   tried_count: number
+  created_at: string
 }
 
 export default function PublicProfile() {
@@ -22,6 +23,7 @@ export default function PublicProfile() {
   const [points, setPoints] = useState(0)
   const [sessionCount, setSessionCount] = useState(0)
   const [rewardCount, setRewardCount] = useState(0)
+  const [totalTried, setTotalTried] = useState(0)
   const [bio, setBio] = useState("")
   const [school, setSchool] = useState("")
   const [hubPosts, setHubPosts] = useState<HubPost[]>([])
@@ -53,6 +55,10 @@ export default function PublicProfile() {
     const { count: rewards } = await supabase
       .from("user_rewards").select("*", { count: "exact", head: true }).eq("user_name", username)
     if (rewards !== null) setRewardCount(rewards)
+
+    const { count: tried } = await supabase
+      .from("hub_tries").select("*", { count: "exact", head: true }).eq("user_name", username)
+    if (tried !== null) setTotalTried(tried)
 
     setLoading(false)
   }
@@ -93,11 +99,11 @@ export default function PublicProfile() {
           ) : (
             <img src={selectedPost.media_url} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
           )}
-          <div style={{
-            position: "absolute", bottom: 0, left: 0, right: 0, padding: "24px 16px",
-            background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%)", zIndex: 110
-          }}>
-            <p style={{ color: "white", fontWeight: 800, fontSize: 16 }}>{selectedPost.session_title}</p>
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "24px 16px", background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%)", zIndex: 110 }}>
+            <span style={{ background: `linear-gradient(135deg, ${getTypeColor(selectedPost.session_type)}, #B400FF)`, color: "white", fontSize: 10, fontWeight: 800, padding: "4px 12px", borderRadius: 100, textTransform: "uppercase" as any, letterSpacing: 1, marginBottom: 8, display: "inline-block" }}>
+              {selectedPost.session_type}
+            </span>
+            <p style={{ color: "white", fontWeight: 800, fontSize: 16, marginTop: 6 }}>{selectedPost.session_title}</p>
             <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 12, marginTop: 4 }}>👥 {selectedPost.tried_count} tried this</p>
           </div>
         </div>
@@ -106,98 +112,81 @@ export default function PublicProfile() {
       <main className="flex-1 overflow-y-auto pb-16">
 
         {/* BACK */}
-        <div className="px-4 pt-4 pb-0">
-          <button onClick={() => router.back()}
-            className="text-zinc-500 text-sm flex items-center gap-1">
+        <div style={{ padding: "16px 16px 0" }}>
+          <button onClick={() => router.back()} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", fontSize: 13, cursor: "pointer" }}>
             ← Back
           </button>
         </div>
 
-        {/* PROFILE HEADER */}
-        <div className="flex flex-col items-center px-6 pt-4 pb-4">
-          <div style={{
-            width: 80, height: 80, borderRadius: "50%",
-            background: "linear-gradient(135deg, #B400FF, #00D4FF)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 32, fontWeight: 900, color: "white", marginBottom: 12,
-            border: isVerified ? "3px solid #00D4FF" : "3px solid rgba(255,255,255,0.1)",
-            boxShadow: isVerified ? "0 0 20px rgba(0,212,255,0.5)" : "none"
-          }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 24px" }}>
+
+          {/* Avatar */}
+          <div style={{ width: 88, height: 88, borderRadius: "50%", background: "linear-gradient(135deg, #B400FF, #00D4FF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, fontWeight: 900, color: "white", marginBottom: 12, border: isVerified ? "3px solid #00D4FF" : "3px solid rgba(255,255,255,0.1)", boxShadow: isVerified ? "0 0 20px rgba(0,212,255,0.4)" : "none" }}>
             {username.charAt(0).toUpperCase()}
           </div>
 
-          <div className="flex items-center gap-2 mb-1">
-            <p className="text-white font-bold text-lg">{username}</p>
+          {/* Username + verified */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+            <p style={{ color: "white", fontWeight: 800, fontSize: 18 }}>{username}</p>
             {isVerified && (
-              <div style={{
-                background: "linear-gradient(135deg, #B400FF, #00D4FF)",
-                borderRadius: "50%", width: 18, height: 18,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 10, color: "white", fontWeight: 800
-              }}>✓</div>
+              <div style={{ background: "linear-gradient(135deg, #B400FF, #00D4FF)", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "white", fontWeight: 800 }}>✓</div>
             )}
           </div>
 
-          {isVerified && (
-            <div className="bg-purple-500/10 border border-purple-500/30 rounded-full px-3 py-0.5 mb-2">
-              <span className="text-purple-400 text-xs font-bold">✓ IRL Verified</span>
-            </div>
-          )}
+          {/* School */}
+          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 8 }}>{school}</p>
 
-          <p className="text-zinc-500 text-sm mb-3">{school}</p>
-
-          <div className="bg-cyan-400/10 border border-cyan-400/30 rounded-full px-4 py-1 mb-3">
-            <span className="text-cyan-400 font-bold text-sm">⚡ {points} LP</span>
+          {/* LP */}
+          <div style={{ background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.3)", borderRadius: 100, padding: "4px 16px", marginBottom: 12 }}>
+            <span style={{ color: "#00D4FF", fontWeight: 700, fontSize: 13 }}>⚡ {points} LP</span>
           </div>
 
+          {/* Bio */}
           {bio ? (
-            <p className="text-zinc-400 text-sm text-center mb-4">{bio}</p>
-          ) : null}
+            <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, textAlign: "center", marginBottom: 16, lineHeight: 1.5 }}>{bio}</p>
+          ) : (
+            <div style={{ marginBottom: 16 }} />
+          )}
 
-          {/* STATS */}
-          <div className="grid grid-cols-2 gap-3 w-full mb-4">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-center">
-              <p className="text-cyan-400 font-black text-2xl">{sessionCount}</p>
-              <p className="text-zinc-500 text-xs mt-1">Sessions</p>
-            </div>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-center">
-              <p className="text-purple-400 font-black text-2xl">{rewardCount}</p>
-              <p className="text-zinc-500 text-xs mt-1">Rewards</p>
-            </div>
+          {/* STATS — TikTok style */}
+          <div style={{ display: "flex", gap: 32, borderTop: "1px solid rgba(255,255,255,0.08)", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingTop: 16, paddingBottom: 16, width: "100%", marginBottom: 8 }}>
+            {[
+              { val: sessionCount, label: "Sessions" },
+              { val: rewardCount, label: "Rewards" },
+              { val: totalTried, label: "Tried" },
+            ].map((s, i) => (
+              <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                <p style={{ color: "white", fontWeight: 800, fontSize: 20, lineHeight: 1 }}>{s.val}</p>
+                <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 4 }}>{s.label}</p>
+              </div>
+            ))}
           </div>
         </div>
 
         {/* HUB POSTS */}
-        <div className="px-4 pb-6">
-          <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold mb-3">Hub Posts</p>
+        <div style={{ padding: "0 16px 32px" }}>
+          <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 12, marginBottom: 12, textTransform: "uppercase" as any, letterSpacing: 1, fontWeight: 700 }}>
+            Hub Posts
+          </p>
           {hubPosts.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-3xl mb-2">🌍</p>
-              <p className="text-zinc-600 text-sm">No posts yet</p>
+            <div style={{ textAlign: "center", padding: "32px 0" }}>
+              <p style={{ fontSize: 32, marginBottom: 8 }}>🌍</p>
+              <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>No posts yet</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {hubPosts.map(post => (
-                <div key={post.id} onClick={() => setSelectedPost(post)}
-                  className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden cursor-pointer">
-                  <div className="relative h-40">
-                    {post.media_type === "video" ? (
-                      <video src={post.media_url} className="w-full h-full object-cover" muted playsInline />
-                    ) : (
-                      <img src={post.media_url} className="w-full h-full object-cover" />
-                    )}
-                    <div className="absolute top-2 left-2">
-                      <span style={{
-                        background: `linear-gradient(135deg, ${getTypeColor(post.session_type)}, #B400FF)`,
-                        color: "white", fontSize: 10, fontWeight: 800,
-                        padding: "3px 10px", borderRadius: 100,
-                        textTransform: "uppercase" as any, letterSpacing: 1
-                      }}>{post.session_type}</span>
-                    </div>
+                <div key={post.id} onClick={() => setSelectedPost(post)} style={{ position: "relative", overflow: "hidden", borderRadius: 12, aspectRatio: "1 / 1", cursor: "pointer", background: "#27272a" }}>
+                  {post.media_type === "video" ? (
+                    <video src={post.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
+                  ) : (
+                    <img src={post.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  )}
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "flex-end", padding: 8 }}>
+                    <p style={{ color: "white", fontWeight: 700, fontSize: 11, lineHeight: 1.3 }}>{post.session_title}</p>
                   </div>
-                  <div className="p-3 flex items-center justify-between">
-                    <p className="text-white text-sm font-bold">{post.session_title}</p>
-                    <p className="text-zinc-500 text-xs">👥 {post.tried_count} tried</p>
+                  <div style={{ position: "absolute", bottom: 8, right: 8 }}>
+                    <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}>👥 {post.tried_count}</span>
                   </div>
                 </div>
               ))}

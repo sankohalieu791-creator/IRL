@@ -10,13 +10,11 @@ type Reward = {
   points_required: number
   description?: string
   icon?: string
-  type?: "badge" | "title" | "trophy"
 }
 
 export default function Rewards() {
   const [user, setUser] = useState("")
   const [points, setPoints] = useState(0)
-  const [sessions, setSessions] = useState(0)
   const [rewards, setRewards] = useState<Reward[]>([])
   const [claimed, setClaimed] = useState<string[]>([])
   const [claiming, setClaiming] = useState<string | null>(null)
@@ -39,30 +37,19 @@ export default function Rewards() {
       .order("points", { ascending: false })
       .limit(1)
       .maybeSingle()
-
     if (leaderboard) setPoints(leaderboard.points)
-
-    const { count: sessionCount } = await supabase
-      .from("session_attempts")
-      .select("*", { count: "exact", head: true })
-      .eq("user_name", user)
-      .eq("status", "accepted")
-    
-    if (sessionCount !== null) setSessions(sessionCount)
 
     const { data: rewardsData } = await supabase
       .from("rewards")
       .select("*")
       .order("points_required", { ascending: true })
       .limit(25)
-
     if (rewardsData) setRewards(rewardsData)
 
     const { data: claimedData } = await supabase
       .from("user_rewards")
       .select("reward_id")
       .eq("user_name", user)
-
     if (claimedData) setClaimed(claimedData.map(r => r.reward_id))
 
     setLoading(false)
@@ -77,34 +64,9 @@ export default function Rewards() {
       .order("points", { ascending: false })
       .limit(1)
       .maybeSingle()
-
     if (!userData) { setClaiming(null); return }
-
-    await supabase
-      .from("leaderboard")
-      .update({ points: userData.points - cost })
-      .eq("user_name", user)
-
-    await supabase
-      .from("user_rewards")
-      .insert({ user_name: user, reward_id: rewardId })
-
-    await loadData()
-    setClaiming(null)
-  }
-
-  async function claimVerification() {
-    setClaiming("verification")
-    
-    await supabase
-      .from("user_rewards")
-      .insert({ user_name: user, reward_id: "irl-verified-30-sessions" })
-
-    await supabase
-      .from("users")
-      .update({ is_verified: true })
-      .eq("user_name", user)
-
+    await supabase.from("leaderboard").update({ points: userData.points - cost }).eq("user_name", user)
+    await supabase.from("user_rewards").insert({ user_name: user, reward_id: rewardId })
     await loadData()
     setClaiming(null)
   }
@@ -144,9 +106,6 @@ export default function Rewards() {
     if (t.includes("early")) return "🌅"
     if (t.includes("spark")) return "✨"
     if (t.includes("street") || t.includes("credit")) return "💪"
-    if (t.includes("badge")) return "🎖️"
-    if (t.includes("title")) return "📜"
-    if (t.includes("trophy")) return "🏅"
     const defaults = ["🏅", "⚡", "🎯", "💪", "🚀", "🔥", "👑", "💎"]
     return defaults[index % defaults.length]
   }
@@ -166,21 +125,118 @@ export default function Rewards() {
   const claimedCount = claimed.length
   const nextReward = rewards.find(r => !claimed.includes(r.id))
   const progressToNext = nextReward ? Math.min((points / nextReward.points_required) * 100, 100) : 100
-  const canGetVerified = sessions >= 30 && !claimed.includes("irl-verified-30-sessions")
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden bg-black text-white">
+
       <div className="flex-shrink-0 px-4 pt-4 pb-3">
         <h1 className="text-2xl font-bold text-cyan-400 mb-1">Rewards</h1>
         <p className="text-zinc-500 text-xs mb-3">Grind LP. Unlock status. Prove yourself.</p>
+
         <div className="rounded-2xl bg-gradient-to-br from-purple-900/60 via-zinc-900 to-cyan-900/40 border border-cyan-500/30 p-4 text-center">
           <p className="text-zinc-400 text-xs uppercase tracking-widest mb-1">Your LinkPoints</p>
           <span className="text-6xl font-black text-white block mb-1" style={{ textShadow: "0 0 30px rgba(0,212,255,0.4)" }}>
             {points}
           </span>
           <span className="text-cyan-400 font-bold text-xl">LP</span>
+          <div className="w-16 h-0.5 bg-gradient-to-r from-purple-500 to-cyan-400 mx-auto my-3 rounded-full" />
+          <div className="flex justify-center gap-6 mb-3">
+            <div className="text-center">
+              <p className="text-lg font-bold text-green-400">{claimedCount}</p>
+              <p className="text-zinc-500 text-xs">Claimed</p>
+            </div>
+            <div className="w-px bg-zinc-700" />
+            <div className="text-center">
+              <p className="text-lg font-bold text-zinc-300">{rewards.length - claimedCount}</p>
+              <p className="text-zinc-500 text-xs">Remaining</p>
+            </div>
+            <div className="w-px bg-zinc-700" />
+            <div className="text-center">
+              <p className="text-lg font-bold text-cyan-400">{rewards.length}</p>
+              <p className="text-zinc-500 text-xs">Total</p>
+            </div>
+          </div>
+          {!loading && nextReward && (
+            <div>
+              <div className="flex justify-between text-xs text-zinc-500 mb-1.5">
+                <span>Next: <span className="text-white font-semibold">{nextReward.title}</span></span>
+                <span>{points}/{nextReward.points_required} LP</span>
+              </div>
+              <div className="w-full bg-zinc-800 rounded-full h-2">
+                <div className="bg-gradient-to-r from-purple-500 to-cyan-400 h-2 rounded-full transition-all duration-700"
+                  style={{ width: `${progressToNext}%` }} />
+              </div>
+            </div>
+          )}
+          {!loading && !nextReward && rewards.length > 0 && (
+            <p className="text-yellow-400 font-bold text-sm">🏆 All rewards claimed! You are a legend.</p>
+          )}
         </div>
       </div>
+
+      {/* REWARDS LIST */}
+      <div className="flex-1 overflow-y-auto px-4 space-y-3 pb-20">
+        {rewards.map((reward, index) => {
+          const isClaimed = claimed.includes(reward.id)
+          const unlocked = points >= reward.points_required
+          const style = getRewardStyle(isClaimed, unlocked, reward.title)
+          const icon = getRewardIcon(reward, index)
+          const tier = getTierLabel(reward.title, reward.points_required)
+          const isClaiming = claiming === reward.id
+          const lpAway = reward.points_required - points
+
+          return (
+            <div key={reward.id} className={`relative rounded-2xl border p-4 shadow-lg transition-all ${style.bg} ${style.border} ${style.shadow} ${!unlocked && !isClaimed ? "opacity-55" : ""}`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 ${isClaimed ? "bg-green-500/20 border border-green-500/30" : unlocked ? "bg-white/10 border border-white/20" : "bg-zinc-800 border border-zinc-700"}`}
+                  style={{ boxShadow: isClaimed ? "0 4px 15px rgba(34,197,94,0.2)" : unlocked ? "0 4px 20px rgba(0,212,255,0.2)" : "none" }}>
+                  {isClaimed ? "✅" : !unlocked ? "🔒" : icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="mb-1">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${tier.color}`}>
+                      {tier.label}
+                    </span>
+                  </div>
+                  <h3 className={`font-black text-sm leading-tight ${isClaimed ? "text-green-300" : unlocked ? "text-white" : "text-zinc-500"}`}>
+                    {reward.title}
+                  </h3>
+                  {reward.description && (
+                    <p className={`text-[11px] mt-0.5 leading-tight ${isClaimed ? "text-green-600/80" : "text-zinc-600"}`}>
+                      {reward.description}
+                    </p>
+                  )}
+                  <p className={`text-xs mt-1 font-semibold ${isClaimed ? "text-green-500/60" : unlocked ? "text-cyan-500/70" : "text-zinc-600"}`}>
+                    ⚡ {reward.points_required} LP
+                  </p>
+                </div>
+                <div className="flex-shrink-0 text-center">
+                  {isClaimed ? (
+                    <div>
+                      <p className="text-green-400 text-xs font-black">CLAIMED</p>
+                      <p className="text-green-600/60 text-[10px]">✓ Owned</p>
+                    </div>
+                  ) : unlocked ? (
+                    <button onClick={() => claimReward(reward.id, reward.points_required)} disabled={!!isClaiming}
+                      className="px-4 py-2.5 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl text-xs font-black shadow-lg disabled:opacity-50 active:scale-95 transition-all"
+                      style={{ boxShadow: "0 4px 20px rgba(124,58,237,0.5)" }}>
+                      {isClaiming ? "..." : "CLAIM"}
+                    </button>
+                  ) : (
+                    <div>
+                      <p className="text-zinc-600 text-xs font-black">LOCKED</p>
+                      <p className="text-zinc-700 text-[10px]">{lpAway} LP away</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {isClaimed && <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-transparent via-green-500/5 to-transparent pointer-events-none" />}
+              {unlocked && !isClaimed && <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-transparent via-cyan-500/3 to-transparent pointer-events-none" />}
+            </div>
+          )
+        })}
+      </div>
+
       <BottomNav />
     </div>
   )

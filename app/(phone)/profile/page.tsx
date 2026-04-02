@@ -30,7 +30,6 @@ export default function Profile() {
   const [bioInput, setBioInput] = useState("")
   const [selectedPost, setSelectedPost] = useState<HubPost | null>(null)
   const [isVerified, setIsVerified] = useState(false)
-  const [deletingPost, setDeletingPost] = useState<string | null>(null)
 
   useEffect(() => {
     const u = getUser() || ""
@@ -84,14 +83,6 @@ export default function Profile() {
     setEditingBio(false)
   }
 
-  async function deletePost(postId: string) {
-    setDeletingPost(postId)
-    await supabase.from("hub_posts").delete().eq("id", postId)
-    await loadHubPosts()
-    setSelectedPost(null)
-    setDeletingPost(null)
-  }
-
   function getTypeColor(type: string) {
     if (type === "Challenge") return "#7c3aed"
     if (type === "Activity") return "#be185d"
@@ -120,9 +111,6 @@ export default function Profile() {
             </span>
             <p style={{ color: "white", fontWeight: 800, fontSize: 16, marginTop: 6 }}>{selectedPost.session_title}</p>
             <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 12, marginTop: 4 }}>👥 {selectedPost.tried_count} tried this</p>
-            <button onClick={() => deletePost(selectedPost.id)} disabled={!!deletingPost} style={{ marginTop: 12, padding: "8px 16px", background: "rgba(255,0,0,0.2)", border: "1px solid rgba(255,0,0,0.5)", borderRadius: 6, color: "#ff6b6b", fontWeight: 700, fontSize: 12, cursor: "pointer", width: "100%" }}>
-              {deletingPost === selectedPost.id ? "Deleting..." : "🗑️ Delete Post"}
-            </button>
           </div>
         </div>
       )}
@@ -130,46 +118,30 @@ export default function Profile() {
       <main className="flex-1 overflow-y-auto pb-16">
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "32px 24px 20px" }}>
 
-          <div style={{ width: 88, height: 88, borderRadius: "50%", background: "linear-gradient(135deg, #B400FF, #00D4FF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, fontWeight: 900, color: "white", marginBottom: 12, border: "3px solid rgba(255,255,255,0.1)" }}>
+          {/* Avatar */}
+          <div style={{ width: 88, height: 88, borderRadius: "50%", background: "linear-gradient(135deg, #B400FF, #00D4FF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, fontWeight: 900, color: "white", marginBottom: 12, border: isVerified ? "3px solid #00D4FF" : "3px solid rgba(255,255,255,0.1)", boxShadow: isVerified ? "0 0 20px rgba(0,212,255,0.4)" : "none" }}>
             {USER.charAt(0).toUpperCase()}
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+          {/* Username + verified */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
             <p style={{ color: "white", fontWeight: 800, fontSize: 18 }}>{USER}</p>
             {isVerified && (
-              <div style={{ background: "linear-gradient(135deg, #B400FF, #00D4FF)", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "white" }}>✓</div>
+              <div style={{ background: "linear-gradient(135deg, #B400FF, #00D4FF)", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "white", fontWeight: 800 }}>✓</div>
             )}
           </div>
 
-          {isVerified && (
-            <div style={{ background: "rgba(180,0,255,0.1)", border: "1px solid rgba(180,0,255,0.3)", borderRadius: 100, padding: "4px 16px", marginBottom: 8 }}>
-              <span style={{ color: "#B400FF", fontWeight: 700, fontSize: 12 }}>✓ IRL Verified</span>
-            </div>
-          )}
+          {/* School */}
+          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 8 }}>{SCHOOL}</p>
 
-          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 20 }}>{SCHOOL}</p>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, width: "100%", maxWidth: 400, marginBottom: 24, textAlign: "center" }}>
-            <div>
-              <p style={{ color: "white", fontWeight: 900, fontSize: 24, marginBottom: 4 }}>{sessionCount}</p>
-              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}>Sessions</p>
-            </div>
-            <div>
-              <p style={{ color: "white", fontWeight: 900, fontSize: 24, marginBottom: 4 }}>{totalTried.toLocaleString()}</p>
-              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}>Total Tried</p>
-            </div>
-            <div>
-              <p style={{ color: "white", fontWeight: 900, fontSize: 24, marginBottom: 4 }}>{rewardCount}</p>
-              <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}>Rewards</p>
-            </div>
-          </div>
-
-          <div style={{ background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.3)", borderRadius: 100, padding: "4px 16px", marginBottom: 24 }}>
+          {/* LP badge */}
+          <div style={{ background: "rgba(0,212,255,0.1)", border: "1px solid rgba(0,212,255,0.3)", borderRadius: 100, padding: "4px 16px", marginBottom: 16 }}>
             <span style={{ color: "#00D4FF", fontWeight: 700, fontSize: 13 }}>⚡ {points} LP</span>
           </div>
 
+          {/* Bio */}
           {editingBio ? (
-            <div style={{ width: "100%", maxWidth: 400, marginBottom: 20 }}>
+            <div style={{ width: "100%", maxWidth: 400, marginBottom: 16 }}>
               <textarea value={bioInput} onChange={e => setBioInput(e.target.value)}
                 style={{ width: "100%", padding: "12px 16px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,212,255,0.3)", borderRadius: 12, color: "white", fontSize: 13, fontFamily: "inherit", minHeight: 80, marginBottom: 8, boxSizing: "border-box" as any }} />
               <div style={{ display: "flex", gap: 8 }}>
@@ -178,25 +150,38 @@ export default function Profile() {
               </div>
             </div>
           ) : (
-            <div style={{ width: "100%", maxWidth: 400, marginBottom: 20, textAlign: "center" }}>
-              <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, lineHeight: 1.5, marginBottom: 12, minHeight: 40 }}>
-                {bio || "No bio yet"}
+            <div style={{ width: "100%", maxWidth: 400, marginBottom: 16, textAlign: "center" }}>
+              <p onClick={() => setEditingBio(true)} style={{ color: bio ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)", fontSize: 13, lineHeight: 1.5, cursor: "pointer", minHeight: 20 }}>
+                {bio || "Tap to add a bio..."}
               </p>
-              <button onClick={() => setEditingBio(true)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.7)", fontWeight: 600, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>
-                {bio ? "Edit Bio" : "Add Bio"}
-              </button>
             </div>
           )}
 
-          <button onClick={() => { logout(); router.push("/login") }} style={{ padding: "12px 24px", background: "rgba(255,0,0,0.1)", border: "1px solid rgba(255,0,0,0.3)", borderRadius: 8, color: "#ff6b6b", fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 24 }}>
-            Logout
+          {/* STATS — TikTok style, no boxes */}
+          <div style={{ display: "flex", gap: 32, marginBottom: 20, borderTop: "1px solid rgba(255,255,255,0.08)", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingTop: 16, paddingBottom: 16, width: "100%" }}>
+            {[
+              { val: sessionCount, label: "Sessions" },
+              { val: rewardCount, label: "Rewards" },
+              { val: totalTried, label: "Tried" },
+            ].map((s, i) => (
+              <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                <p style={{ color: "white", fontWeight: 800, fontSize: 20, lineHeight: 1 }}>{s.val}</p>
+                <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 4 }}>{s.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Logout */}
+          <button onClick={() => { logout(); router.push("/login") }} style={{ padding: "10px 24px", background: "rgba(255,0,0,0.1)", border: "1px solid rgba(255,0,0,0.3)", borderRadius: 8, color: "#ff6b6b", fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 24, width: "100%" }}>
+            Log Out
           </button>
         </div>
 
+        {/* HUB POSTS */}
         {hubPosts.length > 0 && (
           <div style={{ padding: "0 16px 32px" }}>
             <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 12, marginBottom: 12, textTransform: "uppercase" as any, letterSpacing: 1, fontWeight: 700 }}>
-              📹 My Videos
+              Your Hub Posts
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {hubPosts.map(post => (
@@ -206,8 +191,12 @@ export default function Profile() {
                   ) : (
                     <img src={post.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   )}
-                  <div style={{ position: "absolute", bottom: 8, left: 8, background: "rgba(0,0,0,0.7)", padding: "4px 8px", borderRadius: 6, fontSize: 10, color: "rgba(0,212,255,0.8)" }}>
-                    👥 {post.tried_count} Tried
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "flex-end", padding: 8 }}>
+                    <p style={{ color: "white", fontWeight: 700, fontSize: 11, lineHeight: 1.3 }}>{post.session_title}</p>
+                  </div>
+                  {/* Tried count bottom right */}
+                  <div style={{ position: "absolute", bottom: 8, right: 8 }}>
+                    <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}>👥 {post.tried_count}</span>
                   </div>
                 </div>
               ))}
@@ -215,7 +204,6 @@ export default function Profile() {
           </div>
         )}
       </main>
-
       <BottomNav />
     </div>
   )
