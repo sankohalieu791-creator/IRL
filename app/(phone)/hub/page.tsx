@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { getUser } from "@/lib/auth"
+import { getUser, getSchool } from "@/lib/auth"
 import BottomNav from "@/components/BottomNav"
 
 type HubPost = {
@@ -25,18 +25,21 @@ type Filter = "All" | "Challenge" | "Activity" | "Quest"
 export default function Hub() {
   const router = useRouter()
   const [user, setUser] = useState("")
+  const [school, setSchool] = useState("")
   const [posts, setPosts] = useState<HubPost[]>([])
   const [filter, setFilter] = useState<Filter>("All")
   const [tried, setTried] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const [tryingId, setTryingId] = useState<string | null>(null)
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({})
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const observerRef = useRef<IntersectionObserver | null>(null)
 
   useEffect(() => {
-    const u = getUser()
-    if (u) setUser(u)
-    loadPosts()
+    const u = getUser() || ""
+    const s = getSchool() || ""
+    setUser(u)
+    setSchool(s)
   }, [])
 
   useEffect(() => {
@@ -57,10 +60,7 @@ export default function Hub() {
           if (entry.isIntersecting && entry.intersectionRatio > 0.7) {
             if (vid) {
               vid.muted = false
-              vid.play().catch(() => {
-                vid.muted = true
-                vid.play().catch(() => {})
-              })
+              vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}) })
             }
           } else if (vid) {
             vid.pause()
@@ -102,16 +102,57 @@ export default function Hub() {
   }
 
   async function handleTryIRL(post: HubPost) {
-    if (tried.includes(post.id)) return
-    await supabase.from("hub_tries").insert({ hub_post_id: post.id, user_name: user })
-    await supabase.from("hub_posts").update({ tried_count: post.tried_count + 1 }).eq("id", post.id)
-    setTried((p) => [...p, post.id])
-    setPosts((p) => p.map((x) => (x.id === post.id ? { ...x, tried_count: x.tried_count + 1 } : x)))
-    if (post.session_id) {
-      router.push(`/sessions?session=${post.session_id}`)
-    } else {
-      router.push("/sessions")
+    if (tried.includes(post.id) || tryingId === post.id || !user) return
+    setTryingId(post.id)
+
+    try {
+      // Record the hub try
+      await supabase.from("hub_tries").insert({ hub_post_id: post.id, user_name: user })
+
+      // Increment tried count
+      await supabase.from("hub_posts")
+        .update({ tried_count: post.tried_count + 1 })
+        .eq("id", post.id)
+
+      // Start the 24hr session timer if not already started
+      if (post.session_id) {
+        const { data: existing } = await supabase
+          .from("session_attempts")
+          .select("id")
+          .eq("user_name", user)
+          .eq("session_id", post.session_id)
+          .maybeSingle()
+
+        if (!existing) {
+          await supabase.from("session_attempts").insert({
+            user_name: user,
+            session_id: post.session_id,
+            status: "pending"
+          })
+          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          await supabase.from("sessions")
+            .update({ expires_at: expiresAt })
+            .eq("id", post.session_id)
+        }
+      }
+
+      // Update local state
+      setTried(prev => [...prev, post.id])
+      setPosts(prev => prev.map(p =>
+        p.id === post.id ? { ...p, tried_count: p.tried_count + 1 } : p
+      ))
+
+      // Navigate to that specific session
+      if (post.session_id) {
+        router.push(`/sessions?session=${post.session_id}`)
+      } else {
+        router.push("/sessions")
+      }
+    } catch (e) {
+      console.error("Try IRL error:", e)
     }
+
+    setTryingId(null)
   }
 
   const timeAgo = (d: string) => {
@@ -140,10 +181,11 @@ export default function Hub() {
       background: "#000", position: "relative",
       display: "flex", flexDirection: "column"
     }}>
+      {/* FLOATING HEADER */}
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0, zIndex: 30,
         padding: "12px 16px 10px",
-        background: "linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%)",
+        background: "linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, transparent 100%)",
         display: "flex", alignItems: "center", gap: 10
       }}>
         <span style={{ color: "#00D4FF", fontWeight: 800, fontSize: 20, flexShrink: 0 }}>Hub</span>
@@ -160,6 +202,7 @@ export default function Hub() {
         </div>
       </div>
 
+      {/* FEED */}
       <div style={{
         flex: 1, minHeight: 0, overflowY: "scroll",
         scrollSnapType: "y mandatory",
@@ -198,6 +241,7 @@ export default function Hub() {
               position: "relative", overflow: "hidden", background: "#000"
             }}
           >
+            {/* MEDIA */}
             {post.media_type === "video" ? (
               <video
                 ref={(el) => { videoRefs.current[post.id] = el }}
@@ -207,16 +251,17 @@ export default function Hub() {
               />
             ) : (
               <img src={post.media_url} alt=""
-                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-              />
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
             )}
 
+            {/* GRADIENT OVERLAY */}
             <div style={{
               position: "absolute", inset: 0,
-              background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.2) 40%, transparent 70%, rgba(0,0,0,0.4) 100%)",
+              background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.15) 40%, transparent 65%, rgba(0,0,0,0.5) 100%)",
               zIndex: 1
             }} />
 
+            {/* TYPE + CATEGORY BADGES */}
             <div style={{
               position: "absolute", top: 72, left: 16, right: 16, zIndex: 10,
               display: "flex", justifyContent: "space-between", alignItems: "center"
@@ -235,12 +280,15 @@ export default function Hub() {
               }}>{post.session_category}</span>
             </div>
 
+            {/* BOTTOM CONTENT */}
             <div style={{ position: "absolute", bottom: 80, left: 16, right: 16, zIndex: 10 }}>
+
+              {/* Avatar + username */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                 <div
-                  onClick={() => router.push(`/user/${post.user_name}`)}
+                  onClick={() => router.push(`/user/${encodeURIComponent(post.user_name)}`)}
                   style={{
-                    width: 32, height: 32, borderRadius: "50%",
+                    width: 34, height: 34, borderRadius: "50%",
                     background: "linear-gradient(135deg, #B400FF, #00D4FF)",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 13, fontWeight: 900, color: "white",
@@ -251,8 +299,10 @@ export default function Hub() {
                   {post.user_name.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <p onClick={() => router.push(`/user/${post.user_name}`)}
-                    style={{ color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", lineHeight: 1.2 }}>
+                  <p
+                    onClick={() => router.push(`/user/${encodeURIComponent(post.user_name)}`)}
+                    style={{ color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", lineHeight: 1.2 }}
+                  >
                     {post.user_name}
                   </p>
                   <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, lineHeight: 1.2 }}>
@@ -261,30 +311,41 @@ export default function Hub() {
                 </div>
               </div>
 
+              {/* Session title */}
               <p style={{
                 color: "white", fontWeight: 800, fontSize: 16,
                 lineHeight: 1.3, marginBottom: 14,
                 textShadow: "0 1px 6px rgba(0,0,0,0.8)"
               }}>{post.session_title}</p>
 
+              {/* TRY IRL + TRIED COUNT */}
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <button
                   onClick={() => handleTryIRL(post)}
-                  disabled={tried.includes(post.id)}
+                  disabled={tried.includes(post.id) || tryingId === post.id}
                   style={{
                     flex: "0 0 65%", padding: "14px 0", borderRadius: 9999,
                     border: "none", fontWeight: 800, fontSize: 14,
                     cursor: tried.includes(post.id) ? "default" : "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                    background: tried.includes(post.id) ? "#27272a" : "linear-gradient(135deg,#B400FF,#00D4FF)",
+                    background: tried.includes(post.id)
+                      ? "#27272a"
+                      : tryingId === post.id
+                      ? "rgba(180,0,255,0.5)"
+                      : "linear-gradient(135deg,#B400FF,#00D4FF)",
                     color: tried.includes(post.id) ? "#71717a" : "white",
-                    boxShadow: tried.includes(post.id) ? "none" : "0 4px 20px rgba(180,0,255,0.5)"
+                    boxShadow: tried.includes(post.id) ? "none" : "0 4px 20px rgba(180,0,255,0.5)",
+                    transition: "all 0.2s"
                   }}
                 >
-                  {tried.includes(post.id) ? <>✓ Tried IRL</> : (
+                  {tryingId === post.id ? (
+                    <span style={{ fontSize: 12 }}>Starting...</span>
+                  ) : tried.includes(post.id) ? (
+                    <>✓ Timer Started</>
+                  ) : (
                     <>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                       </svg>
                       TRY IRL
                     </>
@@ -298,10 +359,10 @@ export default function Hub() {
                   alignItems: "center", justifyContent: "center", gap: 5
                 }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                    <circle cx="9" cy="7" r="4"/>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                   </svg>
                   <span style={{ color: "white", fontSize: 12, fontWeight: 700 }}>
                     {post.tried_count.toLocaleString()} Tried
