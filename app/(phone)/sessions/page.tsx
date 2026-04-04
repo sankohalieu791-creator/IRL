@@ -1,61 +1,55 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState, useRef } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import BottomNav from "@/components/BottomNav"
 import NotificationBell from "@/components/NotificationBell"
 import { supabase } from "@/lib/supabase"
 import { getUser, getSchool } from "@/lib/auth"
 
-const USER = getUser() || "Test User"
-const SCHOOL = getSchool() || "Test School"
-
-type Session = {
-  id: string
-  title: string
-  points: number
-  image: string
-  category: string
-  type: string
-  skill_type: string
-  creator: string
-  expires_at: string
-}
-
-type AttemptStatus = {
-  [sessionId: string]: {
-    timeLeft: string
-    status: string
-    expired: boolean
-  }
-}
-
 export default function Sessions() {
   const router = useRouter()
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [attempts, setAttempts] = useState<AttemptStatus>({})
+  const searchParams = useSearchParams()
+  const highlightSession = searchParams.get("session")
+
+  const [user, setUser] = useState("")
+  const [school, setSchool] = useState("")
+  const [sessions, setSessions] = useState<any[]>([])
+  const [attempts, setAttempts] = useState<Record<string, any>>({})
   const [activeUpload, setActiveUpload] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [shareChoice, setShareChoice] = useState<{ [sessionId: string]: "hub" | "private" | null }>({})
-
-  const ticker = [
-    "🏆 Alex is #1 on the leaderboard!",
-    "🎉 Jessica just earned the Bronze Trophy",
-    "⚡ Jordan completed Morning Run Challenge",
-    "🔥 Sam unlocked 500 LP milestone"
-  ]
+  const [shareChoice, setShareChoice] = useState<Record<string, "hub" | "private" | null>>({})
+  const sessionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   useEffect(() => {
-    loadSessions()
-    loadAttempts()
+    const u = getUser() || ""
+    const s = getSchool() || ""
+    setUser(u)
+    setSchool(s)
   }, [])
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setSessions(prev => [...prev])
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [])
+    if (user) {
+      loadSessions()
+      loadAttempts()
+    }
+  }, [user])
+
+  // Auto-open the specific session from Hub
+  useEffect(() => {
+    if (!highlightSession || sessions.length === 0) return
+
+    // Small delay to let page render first
+    setTimeout(() => {
+      // Scroll to the session
+      const el = sessionRefs.current[highlightSession]
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" })
+      }
+      // Auto-open its upload panel
+      setActiveUpload(highlightSession)
+    }, 300)
+  }, [highlightSession, sessions])
 
   function getTimeLeft(expiresAt: string) {
     if (!expiresAt) return null
@@ -64,7 +58,7 @@ export default function Sessions() {
     const h = Math.floor(diff / 3600000)
     const m = Math.floor((diff % 3600000) / 60000)
     const s = Math.floor((diff % 60000) / 1000)
-    return `${h}h ${m}m ${s}s remaining`
+    return `${h}h ${m}m ${s}s`
   }
 
   async function loadSessions() {
@@ -75,64 +69,34 @@ export default function Sessions() {
   async function loadAttempts() {
     const { data } = await supabase
       .from("session_attempts")
-      .select("session_id, status")
-      .eq("user_name", USER)
-
+      .select("session_id, status, created_at")
+      .eq("user_name", user)
     if (!data) return
-    const map: AttemptStatus = {}
-    data.forEach(a => {
-      map[a.session_id] = {
-        timeLeft: "",
-        status: a.status,
-        expired: false
-      }
-    })
+    const map: Record<string, any> = {}
+    data.forEach(a => { map[a.session_id] = a })
     setAttempts(map)
   }
 
-  async function trySession(session: Session) {
+  async function trySession(session: any) {
     const { data: existing } = await supabase
-      .from("session_attempts")
-      .select("id")
-      .eq("user_name", USER)
-      .eq("session_id", session.id)
-      .maybeSingle()
+      .from("session_attempts").select("id")
+      .eq("user_name", user).eq("session_id", session.id).maybeSingle()
 
-    if (existing) {
-      setActiveUpload(session.id)
-      return
-    }
+    if (existing) { setActiveUpload(session.id); return }
 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
 
-    const { error } = await supabase
-      .from("session_attempts")
-      .insert({
-        user_name: USER,
-        session_id: session.id,
-        status: "pending"
-      })
+    await supabase.from("session_attempts").insert({
+      user_name: user, session_id: session.id, status: "pending"
+    })
+    await supabase.from("sessions").update({ expires_at: expiresAt }).eq("id", session.id)
 
-    if (error) {
-      alert(`Error: ${error.message}`)
-      return
-    }
-
-    await supabase
-      .from("sessions")
-      .update({ expires_at: expiresAt })
-      .eq("id", session.id)
-
-    setSessions(prev =>
-      prev.map(s => s.id === session.id ? { ...s, expires_at: expiresAt } : s)
-    )
+    setSessions(prev => prev.map(s =>
+      s.id === session.id ? { ...s, expires_at: expiresAt } : s
+    ))
     setAttempts(prev => ({
       ...prev,
-      [session.id]: {
-        timeLeft: "24h 0m 0s remaining",
-        status: "pending",
-        expired: false
-      }
+      [session.id]: { session_id: session.id, status: "pending" }
     }))
     setActiveUpload(session.id)
   }
@@ -141,59 +105,31 @@ export default function Sessions() {
     setUploading(true)
     try {
       const ext = file.name.split(".").pop()
-      const fileName = `${USER}-${sessionId}-${Date.now()}.${ext}`
+      const fileName = `${user}-${sessionId}-${Date.now()}.${ext}`
 
       const { error: uploadError } = await supabase.storage
-        .from("proof")
-        .upload(fileName, file, { upsert: true })
+        .from("proof").upload(fileName, file, { upsert: true })
+      if (uploadError) { alert(`Upload error: ${uploadError.message}`); setUploading(false); return }
 
-      if (uploadError) {
-        alert(`Upload error: ${uploadError.message}`)
-        setUploading(false)
-        return
-      }
-
-      const { data: urlData } = supabase.storage
-        .from("proof")
-        .getPublicUrl(fileName)
-
+      const { data: urlData } = supabase.storage.from("proof").getPublicUrl(fileName)
       const proofUrl = urlData.publicUrl
 
       if (shareType === "hub") {
-        // Share to Hub — get LP instantly
         const session = sessions.find(s => s.id === sessionId)
+        await supabase.from("session_attempts")
+          .update({ proof_url: proofUrl, status: "accepted" })
+          .eq("user_name", user).eq("session_id", sessionId)
 
-        // Update attempt to accepted immediately
-        await supabase
-          .from("session_attempts")
-          .update({
-            proof_url: proofUrl,
-            status: "accepted"
-          })
-          .eq("user_name", USER)
-          .eq("session_id", sessionId)
-
-        // Award LP instantly
-        const { data: lb } = await supabase
-          .from("leaderboard")
-          .select("id, points")
-          .eq("user_name", USER)
-          .maybeSingle()
-
+        const { data: lb } = await supabase.from("leaderboard")
+          .select("id, points").eq("user_name", user).maybeSingle()
         if (lb && session) {
-          await supabase
-            .from("leaderboard")
-            .update({ points: lb.points + session.points })
-            .eq("id", lb.id)
+          await supabase.from("leaderboard")
+            .update({ points: lb.points + session.points }).eq("id", lb.id)
         }
 
-        // Determine media type
         const isVideo = file.type.startsWith("video")
-
-        // Post to Hub
         await supabase.from("hub_posts").insert({
-          user_name: USER,
-          school: SCHOOL,
+          user_name: user, school,
           session_id: sessionId,
           session_title: session?.title || "",
           session_type: session?.type || "Quest",
@@ -203,49 +139,36 @@ export default function Sessions() {
           tried_count: 0
         })
 
-        // Send notification
         await supabase.from("notifications").insert({
-          user_name: USER,
+          user_name: user,
           title: "LP Awarded! ⚡",
-          message: `You shared your proof on the Hub and earned ${session?.points} LP instantly!`,
-          type: "proof_accepted",
-          read: false
+          message: `You shared to the Hub and earned ${session?.points} LP instantly!`,
+          type: "proof_accepted", read: false
         })
 
-        setAttempts(prev => ({
-          ...prev,
-          [sessionId]: { ...prev[sessionId], status: "accepted" }
-        }))
-
-        alert(`🔥 Posted to Hub! +${session?.points} LP awarded instantly!`)
-
+        setAttempts(prev => ({ ...prev, [sessionId]: { ...prev[sessionId], status: "accepted" } }))
+        alert(`🔥 Posted to Hub! +${session?.points} LP awarded!`)
       } else {
-        // Share privately — admin reviews
-        await supabase
-          .from("session_attempts")
-          .update({
-            proof_url: proofUrl,
-            status: "submitted"
-          })
-          .eq("user_name", USER)
-          .eq("session_id", sessionId)
-
-        setAttempts(prev => ({
-          ...prev,
-          [sessionId]: { ...prev[sessionId], status: "submitted" }
-        }))
-
-        alert("Proof submitted privately! Your institution will review it.")
+        await supabase.from("session_attempts")
+          .update({ proof_url: proofUrl, status: "submitted" })
+          .eq("user_name", user).eq("session_id", sessionId)
+        setAttempts(prev => ({ ...prev, [sessionId]: { ...prev[sessionId], status: "submitted" } }))
+        alert("Proof submitted! Your institution will review it.")
       }
 
       setActiveUpload(null)
       setShareChoice(prev => ({ ...prev, [sessionId]: null }))
-
     } catch (e: any) {
       alert(`Failed: ${e.message}`)
     }
     setUploading(false)
   }
+
+  // Live timer ticker
+  useEffect(() => {
+    const interval = setInterval(() => setSessions(prev => [...prev]), 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   function getTypeColor(type: string) {
     if (type === "Challenge") return "bg-red-500"
@@ -253,48 +176,21 @@ export default function Sessions() {
     return "bg-purple-500"
   }
 
-  function getSkillColor(skill: string) {
-    if (skill === "Competitive") return "border-orange-400 text-orange-300"
-    return "border-zinc-500 text-zinc-300"
-  }
-
   return (
     <div className="flex flex-col h-full">
       <main className="flex flex-col flex-1 overflow-y-auto pb-16 text-white">
 
-        {/* HEADER */}
         <div className="p-4 pb-2 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-cyan-400">Sessions</h1>
           <NotificationBell />
         </div>
 
-      {/* TABS */}
-<div className="flex text-sm border-b border-zinc-800">
-  <button className="flex-1 py-2.5 text-white font-semibold bg-zinc-800">
-    Sessions
-  </button>
-  <button
-    onClick={() => router.push("/groups")}
-    className="flex-1 py-2.5 text-zinc-400 hover:text-white transition-colors"
-  >
-    Groups
-  </button>
-  <button
-    onClick={() => router.push("/leaderboard")}
-    className="flex-1 py-2.5 text-zinc-400 hover:text-white transition-colors"
-  >
-    Leaderboard
-  </button>
-</div>
-
-        {/* TICKER */}
-        <div className="bg-zinc-900/60 border-b border-zinc-800 py-2 overflow-hidden w-full">
-          <div className="animate-marquee text-xs text-zinc-400 whitespace-nowrap px-4">
-            {ticker.join("     ·     ")}
-          </div>
+        <div className="flex text-sm border-b border-zinc-800">
+          <button className="flex-1 py-2.5 text-white font-semibold bg-zinc-800">Sessions</button>
+          <button onClick={() => router.push("/groups")} className="flex-1 py-2.5 text-zinc-400">Groups</button>
+          <button onClick={() => router.push("/leaderboard")} className="flex-1 py-2.5 text-zinc-400">Leaderboard</button>
         </div>
 
-        {/* SESSIONS */}
         <div className="p-4 space-y-5">
           {sessions.map((session) => {
             const attempt = attempts[session.id]
@@ -305,47 +201,72 @@ export default function Sessions() {
             const showUpload = activeUpload === session.id
             const timeLeft = getTimeLeft(session.expires_at)
             const currentChoice = shareChoice[session.id]
+            const isHighlighted = highlightSession === session.id
 
             return (
               <div
                 key={session.id}
-                className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800"
+                ref={(el) => { sessionRefs.current[session.id] = el }}
+                className="rounded-2xl overflow-hidden"
+                style={{
+                  background: isHighlighted ? "rgba(0,212,255,0.05)" : "#18181b",
+                  border: isHighlighted
+                    ? "1.5px solid rgba(0,212,255,0.5)"
+                    : "1px solid rgba(255,255,255,0.07)",
+                  boxShadow: isHighlighted ? "0 0 30px rgba(0,212,255,0.1)" : "none",
+                  transition: "all 0.3s"
+                }}
               >
+                {/* IMAGE */}
                 <div className="relative">
                   {session.image ? (
-                    <img
-                      src={session.image}
-                      className="w-full h-36 object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none"
-                      }}
-                    />
+                    <img src={session.image} className="w-full h-36 object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }} />
                   ) : (
                     <div className="w-full h-36 bg-gradient-to-br from-zinc-800 to-zinc-700" />
                   )}
-
-                  <div className="absolute top-2 left-2 flex gap-1.5">
+                  <div className="absolute top-2 left-2">
                     <span className={`${getTypeColor(session.type)} text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide`}>
                       {session.type || "Quest"}
                     </span>
-                    <span className={`bg-zinc-900/80 border ${getSkillColor(session.skill_type)} text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide`}>
-                      ◎ {session.skill_type || "Open Skill"}
-                    </span>
                   </div>
-
                   <div className="absolute top-2 right-2 bg-zinc-900/80 border border-cyan-500/50 text-cyan-400 text-[11px] font-bold px-2.5 py-1 rounded-full">
                     ⚡ {session.points} LP
                   </div>
+                  {/* FROM HUB tag */}
+                  {isHighlighted && (
+                    <div className="absolute bottom-2 left-2">
+                      <span className="bg-cyan-400 text-black text-[10px] font-black px-3 py-1 rounded-full">
+                        ← From Hub
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-4">
                   <h3 className="font-bold text-white text-base">{session.title}</h3>
-                  <p className="text-zinc-500 text-xs mt-0.5 mb-2">
+                  <p className="text-zinc-500 text-xs mt-0.5 mb-3">
                     by {session.creator || "Admin"} · {session.category || "General"}
                   </p>
 
-                  {timeLeft && timeLeft !== "Expired" && (
-                    <p className="text-cyan-400 text-xs mb-3">⏱ {timeLeft}</p>
+                  {/* LIVE TIMER */}
+                  {timeLeft && timeLeft !== "Expired" && hasAttempt && !isAccepted && (
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-zinc-500 text-xs">Time remaining</span>
+                        <span className="text-cyan-400 text-xs font-bold">⏱ {timeLeft}</span>
+                      </div>
+                      <div className="w-full bg-zinc-800 rounded-full h-1.5">
+                        <div
+                          className="bg-gradient-to-r from-cyan-400 to-purple-500 h-1.5 rounded-full transition-all"
+                          style={{
+                            width: `${Math.max(0, Math.min(100,
+                              (1 - (new Date(session.expires_at).getTime() - Date.now()) / (24 * 60 * 60 * 1000)) * 100
+                            ))}%`
+                          }}
+                        />
+                      </div>
+                    </div>
                   )}
 
                   {isAccepted && (
@@ -364,19 +285,19 @@ export default function Sessions() {
                     </div>
                   )}
 
-                  {/* UPLOAD SECTION */}
+                  {/* UPLOAD PANEL — auto open when coming from Hub */}
                   {showUpload && !isSubmitted && !isAccepted && (
                     <div className="bg-zinc-800 rounded-xl p-3 mb-3 border border-zinc-700 space-y-3">
-                      <p className="text-sm text-white font-semibold">📎 Upload Proof</p>
+                      <p className="text-sm text-white font-semibold">📎 Upload your proof</p>
 
-                      {/* Share choice */}
                       {!currentChoice && (
                         <>
-                          <p className="text-xs text-zinc-400">How do you want to share your proof?</p>
+                          <p className="text-xs text-zinc-400">How do you want to share?</p>
                           <div className="grid grid-cols-2 gap-2">
                             <button
                               onClick={() => setShareChoice(prev => ({ ...prev, [session.id]: "hub" }))}
-                              className="p-3 bg-gradient-to-br from-purple-900/60 to-cyan-900/40 border border-cyan-500/40 rounded-xl text-center"
+                              className="p-3 rounded-xl text-center"
+                              style={{ background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.3)" }}
                             >
                               <p className="text-lg mb-1">🌍</p>
                               <p className="text-white text-xs font-bold">Share on Hub</p>
@@ -394,7 +315,6 @@ export default function Sessions() {
                         </>
                       )}
 
-                      {/* File picker after choice */}
                       {currentChoice && (
                         <>
                           <div className={`text-xs px-3 py-2 rounded-xl text-center font-semibold ${
@@ -402,29 +322,26 @@ export default function Sessions() {
                               ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40"
                               : "bg-zinc-700 text-zinc-300"
                           }`}>
-                            {currentChoice === "hub" ? "🌍 Sharing to Hub — LP awarded instantly" : "🔒 Sharing privately — admin will review"}
+                            {currentChoice === "hub"
+                              ? "🌍 Sharing to Hub — LP awarded instantly"
+                              : "🔒 Sharing privately — admin will review"}
                           </div>
-
-                          <label className="block w-full py-2.5 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl text-sm font-semibold text-center cursor-pointer text-white">
-                            {uploading ? "Uploading..." : "Choose Photo or Video"}
+                          <label className="block w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl text-sm font-bold text-center cursor-pointer text-white">
+                            {uploading ? "Uploading..." : "📷 Choose Photo or Video"}
                             <input
-                              type="file"
-                              accept="image/*,video/*"
-                              capture="environment"
-                              className="hidden"
-                              disabled={uploading}
+                              type="file" accept="image/*,video/*" capture="environment"
+                              className="hidden" disabled={uploading}
                               onChange={(e) => {
                                 const file = e.target.files?.[0]
                                 if (file) uploadProof(session.id, file, currentChoice)
                               }}
                             />
                           </label>
-
                           <button
                             onClick={() => setShareChoice(prev => ({ ...prev, [session.id]: null }))}
                             className="w-full text-zinc-500 text-xs"
                           >
-                            ← Change sharing option
+                            ← Change option
                           </button>
                         </>
                       )}
@@ -440,7 +357,7 @@ export default function Sessions() {
                           trySession(session)
                         }
                       }}
-                      className="w-full py-2.5 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+                      className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
                     >
                       ⚡ {hasAttempt ? "Upload Proof" : "Try IRL"}
                     </button>
@@ -450,7 +367,6 @@ export default function Sessions() {
             )
           })}
         </div>
-
       </main>
       <BottomNav />
     </div>

@@ -30,7 +30,6 @@ export default function Hub() {
   const [filter, setFilter] = useState<Filter>("All")
   const [tried, setTried] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
-  const [tryingId, setTryingId] = useState<string | null>(null)
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({})
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const observerRef = useRef<IntersectionObserver | null>(null)
@@ -102,57 +101,41 @@ export default function Hub() {
   }
 
   async function handleTryIRL(post: HubPost) {
-    if (tried.includes(post.id) || tryingId === post.id || !user) return
-    setTryingId(post.id)
+    if (tried.includes(post.id) || !user) return
 
-    try {
-      // Record the hub try
-      await supabase.from("hub_tries").insert({ hub_post_id: post.id, user_name: user })
+    // Record try + increment count in background
+    supabase.from("hub_tries").insert({ hub_post_id: post.id, user_name: user })
+    supabase.from("hub_posts").update({ tried_count: post.tried_count + 1 }).eq("id", post.id)
 
-      // Increment tried count
-      await supabase.from("hub_posts")
-        .update({ tried_count: post.tried_count + 1 })
-        .eq("id", post.id)
-
-      // Start the 24hr session timer if not already started
-      if (post.session_id) {
-        const { data: existing } = await supabase
-          .from("session_attempts")
-          .select("id")
-          .eq("user_name", user)
-          .eq("session_id", post.session_id)
-          .maybeSingle()
-
-        if (!existing) {
-          await supabase.from("session_attempts").insert({
-            user_name: user,
-            session_id: post.session_id,
-            status: "pending"
-          })
-          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-          await supabase.from("sessions")
-            .update({ expires_at: expiresAt })
-            .eq("id", post.session_id)
-        }
-      }
-
-      // Update local state
-      setTried(prev => [...prev, post.id])
-      setPosts(prev => prev.map(p =>
-        p.id === post.id ? { ...p, tried_count: p.tried_count + 1 } : p
-      ))
-
-      // Navigate to that specific session
-      if (post.session_id) {
-        router.push(`/sessions?session=${post.session_id}`)
-      } else {
-        router.push("/sessions")
-      }
-    } catch (e) {
-      console.error("Try IRL error:", e)
+    // Start 24hr timer in background
+    if (post.session_id) {
+      supabase.from("session_attempts").select("id")
+        .eq("user_name", user).eq("session_id", post.session_id).maybeSingle()
+        .then(({ data: existing }) => {
+          if (!existing) {
+            supabase.from("session_attempts").insert({
+              user_name: user,
+              session_id: post.session_id,
+              status: "pending"
+            })
+            const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+            supabase.from("sessions").update({ expires_at: expiresAt }).eq("id", post.session_id)
+          }
+        })
     }
 
-    setTryingId(null)
+    // Update local state
+    setTried(prev => [...prev, post.id])
+    setPosts(prev => prev.map(p =>
+      p.id === post.id ? { ...p, tried_count: p.tried_count + 1 } : p
+    ))
+
+    // Navigate immediately to that specific session
+    if (post.session_id) {
+      router.push(`/sessions?session=${post.session_id}`)
+    } else {
+      router.push("/sessions")
+    }
   }
 
   const timeAgo = (d: string) => {
@@ -322,26 +305,19 @@ export default function Hub() {
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <button
                   onClick={() => handleTryIRL(post)}
-                  disabled={tried.includes(post.id) || tryingId === post.id}
+                  disabled={tried.includes(post.id)}
                   style={{
                     flex: "0 0 65%", padding: "14px 0", borderRadius: 9999,
                     border: "none", fontWeight: 800, fontSize: 14,
                     cursor: tried.includes(post.id) ? "default" : "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                    background: tried.includes(post.id)
-                      ? "#27272a"
-                      : tryingId === post.id
-                      ? "rgba(180,0,255,0.5)"
-                      : "linear-gradient(135deg,#B400FF,#00D4FF)",
+                    background: tried.includes(post.id) ? "#27272a" : "linear-gradient(135deg,#B400FF,#00D4FF)",
                     color: tried.includes(post.id) ? "#71717a" : "white",
-                    boxShadow: tried.includes(post.id) ? "none" : "0 4px 20px rgba(180,0,255,0.5)",
-                    transition: "all 0.2s"
+                    boxShadow: tried.includes(post.id) ? "none" : "0 4px 20px rgba(180,0,255,0.5)"
                   }}
                 >
-                  {tryingId === post.id ? (
-                    <span style={{ fontSize: 12 }}>Starting...</span>
-                  ) : tried.includes(post.id) ? (
-                    <>✓ Timer Started</>
+                  {tried.includes(post.id) ? (
+                    <>✓ Tried</>
                   ) : (
                     <>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
