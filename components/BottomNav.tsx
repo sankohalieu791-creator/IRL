@@ -50,24 +50,20 @@ export default function BottomNav() {
   ]
 
   return (
-    <div
-      className="w-full bg-zinc-950 border-t border-zinc-800 flex"
-      style={{ marginBottom: "env(safe-area-inset-bottom, 0px)" }}
-    >
+    <div className="absolute left-0 right-0 bg-zinc-950/95 border-t border-zinc-800 flex" style={{ 
+      paddingBottom: "env(safe-area-inset-bottom, 8px)",
+      bottom: "0px"
+    }}>
       {tabs.map(tab => {
         const active = pathname === tab.href
         return (
           <button
             key={tab.href}
             onClick={() => router.push(tab.href)}
-            className="flex-1 flex flex-col items-center justify-center py-3 gap-1"
+            className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1"
           >
             {tab.icon(active)}
-            <span style={{
-              fontSize: 10,
-              fontWeight: 600,
-              color: active ? "#00D4FF" : "#71717a"
-            }}>
+            <span className={`text-[10px] font-semibold ${active ? "text-cyan-400" : "text-zinc-500"}`}>
               {tab.label}
             </span>
           </button>
