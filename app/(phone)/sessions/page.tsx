@@ -247,27 +247,35 @@ export default function Sessions() {
           <button onClick={() => router.push("/groups")} className="flex-1 py-2.5 text-zinc-400">Groups</button>
           <button onClick={() => router.push("/leaderboard")} className="flex-1 py-2.5 text-zinc-400">Leaderboard</button>
         </div>
-
-        {/* TICKER */}
-        <div className="bg-zinc-900/80 border-b border-zinc-800 py-2 overflow-hidden w-full">
-          <style>{`
-            @keyframes marquee {
-              0% { transform: translateX(100%) }
-              100% { transform: translateX(-100%) }
-            }
-            .marquee-inner {
-              display: inline-block;
-              animation: marquee 22s linear infinite;
-              white-space: nowrap;
-            }
-          `}</style>
-          <div className="overflow-hidden">
-            <span className="marquee-inner text-xs text-zinc-400 px-4">
-              {ticker.join("     ·     ")}
-            </span>
-          </div>
-        </div>
-
+{/* TICKER */}
+<div style={{
+  background: "rgba(24,24,27,0.9)",
+  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  padding: "8px 0",
+  overflow: "hidden",
+  width: "100%",
+  position: "relative",
+}}>
+  <div style={{
+    display: "flex",
+    whiteSpace: "nowrap",
+    animation: "tickerScroll 25s linear infinite",
+  }}>
+    <span style={{ color: "#71717a", fontSize: 12, paddingRight: 60 }}>
+      {ticker.join("     ·     ")}
+    </span>
+    {/* Duplicate for seamless loop */}
+    <span style={{ color: "#71717a", fontSize: 12, paddingRight: 60 }}>
+      {ticker.join("     ·     ")}
+    </span>
+  </div>
+  <style>{`
+    @keyframes tickerScroll {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+  `}</style>
+</div>
         {/* SESSIONS */}
         <div className="p-4 space-y-5">
           {sessions.length === 0 && (
