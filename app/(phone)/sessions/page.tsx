@@ -19,6 +19,11 @@ export default function Sessions() {
   const [activeUpload, setActiveUpload] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [shareChoice, setShareChoice] = useState<Record<string, "hub" | "private" | null>>({})
+  const [ticker, setTicker] = useState<string[]>([
+    "⚡ Welcome to IRL — In Real Life",
+    "🏆 Be the first to top the leaderboard!",
+    "🌍 Complete a session and share it to the Hub",
+  ])
   const sessionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   useEffect(() => {
@@ -32,24 +37,77 @@ export default function Sessions() {
     if (user) {
       loadSessions()
       loadAttempts()
+      loadTicker()
     }
   }, [user])
 
-  // Auto-open the specific session from Hub
+  // Auto open specific session from Hub
   useEffect(() => {
     if (!highlightSession || sessions.length === 0) return
-
-    // Small delay to let page render first
     setTimeout(() => {
-      // Scroll to the session
       const el = sessionRefs.current[highlightSession]
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" })
-      }
-      // Auto-open its upload panel
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" })
       setActiveUpload(highlightSession)
     }, 300)
   }, [highlightSession, sessions])
+
+  // Live timer ticker
+  useEffect(() => {
+    const interval = setInterval(() => setSessions(prev => [...prev]), 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  async function loadTicker() {
+    const items: string[] = []
+
+    // Top 3 leaderboard
+    const { data: lb } = await supabase
+      .from("leaderboard")
+      .select("user_name, points")
+      .order("points", { ascending: false })
+      .limit(3)
+
+    if (lb && lb.length > 0) {
+      const medals = ["🥇", "🥈", "🥉"]
+      lb.forEach((u, i) => {
+        items.push(`${medals[i]} ${u.user_name} is #${i + 1} with ${u.points} LP`)
+      })
+    }
+
+    // Recent hub posts
+    const { data: posts } = await supabase
+      .from("hub_posts")
+      .select("user_name, session_title")
+      .order("created_at", { ascending: false })
+      .limit(3)
+
+    if (posts && posts.length > 0) {
+      posts.forEach(p => {
+        items.push(`⚡ ${p.user_name} just posted "${p.session_title}" on the Hub`)
+      })
+    }
+
+    // Recent accepted proofs
+    const { data: accepted } = await supabase
+      .from("session_attempts")
+      .select("user_name, session_id")
+      .eq("status", "accepted")
+      .order("created_at", { ascending: false })
+      .limit(3)
+
+    if (accepted && accepted.length > 0) {
+      for (const a of accepted) {
+        const { data: s } = await supabase
+          .from("sessions")
+          .select("title")
+          .eq("id", a.session_id)
+          .maybeSingle()
+        if (s) items.push(`✅ ${a.user_name} completed "${s.title}"`)
+      }
+    }
+
+    if (items.length > 0) setTicker(items)
+  }
 
   function getTimeLeft(expiresAt: string) {
     if (!expiresAt) return null
@@ -116,6 +174,7 @@ export default function Sessions() {
 
       if (shareType === "hub") {
         const session = sessions.find(s => s.id === sessionId)
+
         await supabase.from("session_attempts")
           .update({ proof_url: proofUrl, status: "accepted" })
           .eq("user_name", user).eq("session_id", sessionId)
@@ -147,6 +206,8 @@ export default function Sessions() {
         })
 
         setAttempts(prev => ({ ...prev, [sessionId]: { ...prev[sessionId], status: "accepted" } }))
+        // Refresh ticker with new data
+        loadTicker()
         alert(`🔥 Posted to Hub! +${session?.points} LP awarded!`)
       } else {
         await supabase.from("session_attempts")
@@ -164,12 +225,6 @@ export default function Sessions() {
     setUploading(false)
   }
 
-  // Live timer ticker
-  useEffect(() => {
-    const interval = setInterval(() => setSessions(prev => [...prev]), 1000)
-    return () => clearInterval(interval)
-  }, [])
-
   function getTypeColor(type: string) {
     if (type === "Challenge") return "bg-red-500"
     if (type === "Activity") return "bg-pink-500"
@@ -177,21 +232,52 @@ export default function Sessions() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <main className="flex flex-col flex-1 overflow-y-auto pb-16 text-white">
+    <div className="flex flex-col h-full bg-black text-white">
+      <main className="flex flex-col flex-1 overflow-y-auto" style={{ paddingBottom: 80 }}>
 
+        {/* HEADER */}
         <div className="p-4 pb-2 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-cyan-400">Sessions</h1>
           <NotificationBell />
         </div>
 
+        {/* TABS */}
         <div className="flex text-sm border-b border-zinc-800">
           <button className="flex-1 py-2.5 text-white font-semibold bg-zinc-800">Sessions</button>
           <button onClick={() => router.push("/groups")} className="flex-1 py-2.5 text-zinc-400">Groups</button>
           <button onClick={() => router.push("/leaderboard")} className="flex-1 py-2.5 text-zinc-400">Leaderboard</button>
         </div>
 
+        {/* TICKER */}
+        <div className="bg-zinc-900/80 border-b border-zinc-800 py-2 overflow-hidden w-full">
+          <style>{`
+            @keyframes marquee {
+              0% { transform: translateX(100%) }
+              100% { transform: translateX(-100%) }
+            }
+            .marquee-inner {
+              display: inline-block;
+              animation: marquee 22s linear infinite;
+              white-space: nowrap;
+            }
+          `}</style>
+          <div className="overflow-hidden">
+            <span className="marquee-inner text-xs text-zinc-400 px-4">
+              {ticker.join("     ·     ")}
+            </span>
+          </div>
+        </div>
+
+        {/* SESSIONS */}
         <div className="p-4 space-y-5">
+          {sessions.length === 0 && (
+            <div className="text-center py-16">
+              <p className="text-4xl mb-3">⚡</p>
+              <p className="text-zinc-500 text-sm">No sessions yet</p>
+              <p className="text-zinc-700 text-xs mt-1">Your institution will post sessions here</p>
+            </div>
+          )}
+
           {sessions.map((session) => {
             const attempt = attempts[session.id]
             const hasAttempt = !!attempt
@@ -233,7 +319,6 @@ export default function Sessions() {
                   <div className="absolute top-2 right-2 bg-zinc-900/80 border border-cyan-500/50 text-cyan-400 text-[11px] font-bold px-2.5 py-1 rounded-full">
                     ⚡ {session.points} LP
                   </div>
-                  {/* FROM HUB tag */}
                   {isHighlighted && (
                     <div className="absolute bottom-2 left-2">
                       <span className="bg-cyan-400 text-black text-[10px] font-black px-3 py-1 rounded-full">
@@ -258,11 +343,12 @@ export default function Sessions() {
                       </div>
                       <div className="w-full bg-zinc-800 rounded-full h-1.5">
                         <div
-                          className="bg-gradient-to-r from-cyan-400 to-purple-500 h-1.5 rounded-full transition-all"
+                          className="bg-gradient-to-r from-cyan-400 to-purple-500 h-1.5 rounded-full"
                           style={{
                             width: `${Math.max(0, Math.min(100,
                               (1 - (new Date(session.expires_at).getTime() - Date.now()) / (24 * 60 * 60 * 1000)) * 100
-                            ))}%`
+                            ))}%`,
+                            transition: "width 1s linear"
                           }}
                         />
                       </div>
@@ -285,7 +371,7 @@ export default function Sessions() {
                     </div>
                   )}
 
-                  {/* UPLOAD PANEL — auto open when coming from Hub */}
+                  {/* UPLOAD PANEL */}
                   {showUpload && !isSubmitted && !isAccepted && (
                     <div className="bg-zinc-800 rounded-xl p-3 mb-3 border border-zinc-700 space-y-3">
                       <p className="text-sm text-white font-semibold">📎 Upload your proof</p>
