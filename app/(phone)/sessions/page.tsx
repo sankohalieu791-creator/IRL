@@ -233,50 +233,50 @@ export default function Sessions() {
 
   return (
     <div className="flex flex-col h-full bg-black text-white">
-      <main className="flex flex-col flex-1 overflow-y-auto" style={{ paddingBottom: 80 }}>
 
-        {/* HEADER */}
-        <div className="p-4 pb-2 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-cyan-400">Sessions</h1>
-          <NotificationBell />
-        </div>
+      {/* HEADER — outside scroll */}
+      <div className="flex-shrink-0 p-4 pb-2 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-cyan-400">Sessions</h1>
+        <NotificationBell />
+      </div>
 
-        {/* TABS */}
-        <div className="flex text-sm border-b border-zinc-800">
-          <button className="flex-1 py-2.5 text-white font-semibold bg-zinc-800">Sessions</button>
-          <button onClick={() => router.push("/groups")} className="flex-1 py-2.5 text-zinc-400">Groups</button>
-          <button onClick={() => router.push("/leaderboard")} className="flex-1 py-2.5 text-zinc-400">Leaderboard</button>
+      {/* TABS — outside scroll */}
+      <div className="flex-shrink-0 flex text-sm border-b border-zinc-800">
+        <button className="flex-1 py-2.5 text-white font-semibold bg-zinc-800">Sessions</button>
+        <button onClick={() => router.push("/groups")} className="flex-1 py-2.5 text-zinc-400">Groups</button>
+        <button onClick={() => router.push("/leaderboard")} className="flex-1 py-2.5 text-zinc-400">Leaderboard</button>
+      </div>
+
+      {/* TICKER — outside scroll, always visible */}
+      <div className="flex-shrink-0" style={{
+        background: "rgba(24,24,27,0.9)",
+        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        padding: "8px 0",
+        overflow: "hidden",
+      }}>
+        <style>{`
+          @keyframes tickerScroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+          }
+          .ticker-track {
+            display: flex;
+            white-space: nowrap;
+            animation: tickerScroll 25s linear infinite;
+          }
+        `}</style>
+        <div className="ticker-track">
+          <span style={{ color: "#71717a", fontSize: 12, paddingRight: 60 }}>
+            {ticker.join("     ·     ")}
+          </span>
+          <span style={{ color: "#71717a", fontSize: 12, paddingRight: 60 }}>
+            {ticker.join("     ·     ")}
+          </span>
         </div>
-{/* TICKER */}
-<div style={{
-  background: "rgba(24,24,27,0.9)",
-  borderBottom: "1px solid rgba(255,255,255,0.06)",
-  padding: "8px 0",
-  overflow: "hidden",
-  width: "100%",
-  position: "relative",
-}}>
-  <div style={{
-    display: "flex",
-    whiteSpace: "nowrap",
-    animation: "tickerScroll 25s linear infinite",
-  }}>
-    <span style={{ color: "#71717a", fontSize: 12, paddingRight: 60 }}>
-      {ticker.join("     ·     ")}
-    </span>
-    {/* Duplicate for seamless loop */}
-    <span style={{ color: "#71717a", fontSize: 12, paddingRight: 60 }}>
-      {ticker.join("     ·     ")}
-    </span>
-  </div>
-  <style>{`
-    @keyframes tickerScroll {
-      0% { transform: translateX(0); }
-      100% { transform: translateX(-50%); }
-    }
-  `}</style>
-</div>
-        {/* SESSIONS */}
+      </div>
+
+      {/* SESSIONS — only this part scrolls */}
+      <main className="flex-1 overflow-y-auto" style={{ paddingBottom: 20 }}>
         <div className="p-4 space-y-5">
           {sessions.length === 0 && (
             <div className="text-center py-16">
@@ -311,7 +311,6 @@ export default function Sessions() {
                   transition: "all 0.3s"
                 }}
               >
-                {/* IMAGE */}
                 <div className="relative">
                   {session.image ? (
                     <img src={session.image} className="w-full h-36 object-cover"
@@ -342,7 +341,6 @@ export default function Sessions() {
                     by {session.creator || "Admin"} · {session.category || "General"}
                   </p>
 
-                  {/* LIVE TIMER */}
                   {timeLeft && timeLeft !== "Expired" && hasAttempt && !isAccepted && (
                     <div className="mb-3">
                       <div className="flex items-center justify-between mb-1.5">
@@ -379,11 +377,9 @@ export default function Sessions() {
                     </div>
                   )}
 
-                  {/* UPLOAD PANEL */}
                   {showUpload && !isSubmitted && !isAccepted && (
                     <div className="bg-zinc-800 rounded-xl p-3 mb-3 border border-zinc-700 space-y-3">
                       <p className="text-sm text-white font-semibold">📎 Upload your proof</p>
-
                       {!currentChoice && (
                         <>
                           <p className="text-xs text-zinc-400">How do you want to share?</p>
@@ -408,7 +404,6 @@ export default function Sessions() {
                           </div>
                         </>
                       )}
-
                       {currentChoice && (
                         <>
                           <div className={`text-xs px-3 py-2 rounded-xl text-center font-semibold ${
@@ -462,6 +457,7 @@ export default function Sessions() {
           })}
         </div>
       </main>
+
       <BottomNav />
     </div>
   )
