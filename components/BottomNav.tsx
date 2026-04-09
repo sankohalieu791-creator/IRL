@@ -54,7 +54,7 @@ export default function BottomNav() {
       paddingBottom: "env(safe-area-inset-bottom, 8px)",
       bottom: "0px"
     }}>
-          <div className="flex" style={{ paddingBottom: "12px" }}>
+          <div className="flex" style={{ paddingBottom: "12px", paddingTop: "12px", height: "64px" }}>
         {tabs.map(tab => {
           const active = pathname === tab.href
           return (
