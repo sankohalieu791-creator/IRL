@@ -50,7 +50,7 @@ export default function BottomNav() {
   ]
 
   return (
-    <div className="absolute left-0 right-0 bg-zinc-950/95 border-t border-zinc-800 flex" style={{ 
+    <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/95 border-t border-zinc-800 flex z-50" style={{ 
       paddingBottom: "env(safe-area-inset-bottom, 8px)",
       bottom: "0px"
     }}>
