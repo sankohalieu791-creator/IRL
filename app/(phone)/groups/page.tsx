@@ -1,13 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import BottomNav from "@/components/BottomNav"
-import { getUser } from "@/lib/auth"
-
-const USER = getUser() || "Test User"
-
+import { getUser, getSchool } from "@/lib/auth"
 
 type Group = {
   id: string
@@ -24,19 +21,70 @@ type Member = {
   joined_at: string
 }
 
+type Message = {
+  id: string
+  group_id: string
+  sender: string
+  message: string
+  media_url: string | null
+  media_type: string
+  created_at: string
+}
+
 export default function Groups() {
   const router = useRouter()
+  const [user, setUser] = useState("")
+  const [school, setSchool] = useState("")
+  const [role, setRole] = useState("")
   const [groups, setGroups] = useState<Group[]>([])
   const [myMemberships, setMyMemberships] = useState<Record<string, string>>({})
   const [activeGroup, setActiveGroup] = useState<Group | null>(null)
+  const [activeTab, setActiveTab] = useState<"chat" | "leaderboard" | "members">("chat")
   const [members, setMembers] = useState<Member[]>([])
   const [groupLeaderboard, setGroupLeaderboard] = useState<any[]>([])
+  const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    loadGroups()
-    loadMyMemberships()
+    const u = getUser() || ""
+    const s = getSchool() || ""
+    const r = typeof window !== "undefined" ? localStorage.getItem("irl_role") || "" : ""
+    setUser(u)
+    setSchool(s)
+    setRole(r)
   }, [])
+
+  useEffect(() => {
+    if (user) {
+      loadGroups()
+      loadMyMemberships()
+    }
+  }, [user])
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  // Realtime messages
+  useEffect(() => {
+    if (!activeGroup) return
+
+    const channel = supabase
+      .channel(`group-messages-${activeGroup.id}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "group_messages",
+        filter: `group_id=eq.${activeGroup.id}`
+      }, (payload) => {
+        setMessages(prev => [...prev, payload.new as Message])
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [activeGroup])
 
   async function loadGroups() {
     const { data } = await supabase
@@ -46,7 +94,6 @@ export default function Groups() {
 
     if (!data) return
 
-    // Get member counts
     const groupsWithCounts = await Promise.all(
       data.map(async (g) => {
         const { count } = await supabase
@@ -64,7 +111,7 @@ export default function Groups() {
     const { data } = await supabase
       .from("group_members")
       .select("group_id, status")
-      .eq("user_name", USER)
+      .eq("user_name", user)
 
     if (!data) return
     const map: Record<string, string> = {}
@@ -76,11 +123,7 @@ export default function Groups() {
     setLoading(true)
     const { error } = await supabase
       .from("group_members")
-      .insert({
-        group_id: groupId,
-        user_name: USER,
-        status: "pending"
-      })
+      .insert({ group_id: groupId, user_name: user, status: "pending" })
 
     if (error) {
       alert(`Error: ${error.message}`)
@@ -92,8 +135,10 @@ export default function Groups() {
 
   async function openGroup(group: Group) {
     setActiveGroup(group)
+    setActiveTab("chat")
     loadMembers(group.id)
     loadGroupLeaderboard(group.id)
+    loadMessages(group.id)
   }
 
   async function loadMembers(groupId: string) {
@@ -103,12 +148,10 @@ export default function Groups() {
       .eq("group_id", groupId)
       .eq("status", "accepted")
       .order("joined_at", { ascending: true })
-
     if (data) setMembers(data)
   }
 
   async function loadGroupLeaderboard(groupId: string) {
-    // Get accepted members
     const { data: memberData } = await supabase
       .from("group_members")
       .select("user_name")
@@ -116,163 +159,287 @@ export default function Groups() {
       .eq("status", "accepted")
 
     if (!memberData) return
-
     const usernames = memberData.map(m => m.user_name)
 
-    // Get their points from leaderboard
     const { data: pointsData } = await supabase
       .from("leaderboard")
       .select("user_name, points, school")
       .in("user_name", usernames)
       .order("points", { ascending: false })
 
-    if (pointsData) setGroupLeaderboard(pointsData)
+    if (pointsData) {
+      setGroupLeaderboard(pointsData)
+
+      // Update group total LP
+      const totalLP = pointsData.reduce((sum, u) => sum + u.points, 0)
+      await supabase
+        .from("groups")
+        .update({ total_lp: totalLP })
+        .eq("id", groupId)
+    }
+  }
+
+  async function loadMessages(groupId: string) {
+    const { data } = await supabase
+      .from("group_messages")
+      .select("*")
+      .eq("group_id", groupId)
+      .order("created_at", { ascending: true })
+    if (data) setMessages(data)
+  }
+
+  function timeAgo(dateStr: string) {
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const m = Math.floor(diff / 60000)
+    const h = Math.floor(diff / 3600000)
+    const d = Math.floor(diff / 86400000)
+    if (m < 1) return "just now"
+    if (m < 60) return `${m}m ago`
+    if (h < 24) return `${h}h ago`
+    return `${d}d ago`
   }
 
   const medals = ["🥇", "🥈", "🥉"]
+  const isAdmin = role === "admin"
 
-  // GROUP DETAIL VIEW
+  // ── GROUP DETAIL VIEW ────────────────────────────────────────────────────
   if (activeGroup) {
     const totalLP = groupLeaderboard.reduce((sum, u) => sum + u.points, 0)
 
     return (
-      <div className="flex flex-col min-h-screen">
-        <main className="flex flex-col flex-1 overflow-y-auto pb-16 text-white">
+      <div className="flex flex-col h-full bg-black text-white overflow-hidden">
 
-          {/* HEADER */}
-          <div className="p-4 pb-2">
-            <button
-              onClick={() => setActiveGroup(null)}
-              className="flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-3"
-            >
-              ← Back to Groups
+        {/* HEADER */}
+        <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-zinc-800">
+          <button
+            onClick={() => setActiveGroup(null)}
+            className="text-zinc-500 text-sm mb-2 flex items-center gap-1"
+          >
+            ← Back
+          </button>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-bold text-white">{activeGroup.name}</h1>
+              <p className="text-zinc-500 text-xs">{members.length} members · {totalLP} LP total</p>
+            </div>
+            <div style={{
+              background: "rgba(0,212,255,0.1)",
+              border: "1px solid rgba(0,212,255,0.3)",
+              borderRadius: 12, padding: "6px 12px", textAlign: "center"
+            }}>
+              <p style={{ color: "#00D4FF", fontWeight: 800, fontSize: 16 }}>{totalLP}</p>
+              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 9 }}>GROUP LP</p>
+            </div>
+          </div>
+        </div>
+
+        {/* TABS */}
+        <div className="flex-shrink-0 flex border-b border-zinc-800">
+          {(["chat", "leaderboard", "members"] as const).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={`flex-1 py-2.5 text-xs font-bold capitalize transition-colors ${
+                activeTab === tab ? "text-cyan-400 border-b-2 border-cyan-400" : "text-zinc-500"
+              }`}>
+              {tab === "chat" ? "💬 Chat" : tab === "leaderboard" ? "🏆 Board" : "👥 Members"}
             </button>
-            <h1 className="text-2xl font-bold text-cyan-400">
-              {activeGroup.name}
-            </h1>
-            {activeGroup.institution && (
-              <p className="text-zinc-500 text-xs mt-0.5">
-                {activeGroup.institution}
-              </p>
-            )}
-            {activeGroup.description && (
-              <p className="text-zinc-400 text-sm mt-1">
-                {activeGroup.description}
-              </p>
-            )}
-          </div>
+          ))}
+        </div>
 
-          {/* TOTAL LP CARD */}
-          <div className="mx-4 mb-4 bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-cyan-500/30 rounded-2xl p-4 flex justify-between items-center">
-            <div>
-              <p className="text-zinc-400 text-xs">Group Total LP</p>
-              <p className="text-3xl font-bold text-cyan-400">{totalLP} LP</p>
-            </div>
-            <div>
-              <p className="text-zinc-400 text-xs">Members</p>
-              <p className="text-2xl font-bold text-white">{members.length}</p>
-            </div>
-          </div>
+        {/* CHAT TAB */}
+        {activeTab === "chat" && (
+          <div className="flex flex-col flex-1 min-h-0">
 
-          {/* GROUP LEADERBOARD */}
-          <div className="px-4 mb-4">
-            <h2 className="text-sm font-bold text-zinc-300 mb-3 uppercase tracking-wider">
-              Group Leaderboard
-            </h2>
-            <div className="space-y-2">
-              {groupLeaderboard.map((u, i) => (
-                <div
-                  key={`${u.user_name}-${i}`}
-                  className={`rounded-xl p-3 flex justify-between items-center border ${
-                    i === 0 ? "bg-yellow-500/10 border-yellow-500/40" :
-                    i === 1 ? "bg-zinc-400/10 border-zinc-400/40" :
-                    i === 2 ? "bg-orange-500/10 border-orange-500/40" :
-                    "bg-zinc-900 border-zinc-800"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-base w-6">
-                      {i < 3 ? medals[i] : `${i + 1}.`}
-                    </span>
-                    <div>
-                      <p className="font-semibold text-sm">{u.user_name}</p>
-                      {u.school && (
-                        <p className="text-zinc-500 text-xs">{u.school}</p>
-                      )}
+            {/* MESSAGES */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+              {messages.length === 0 && (
+                <div style={{ textAlign: "center", padding: "40px 0" }}>
+                  <p style={{ fontSize: 32, marginBottom: 8 }}>💬</p>
+                  <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>
+                    No messages yet
+                  </p>
+                  <p style={{ color: "rgba(255,255,255,0.2)", fontSize: 11, marginTop: 4 }}>
+                    Your admin will post updates here
+                  </p>
+                </div>
+              )}
+
+              {messages.map(msg => (
+                <div key={msg.id} style={{ maxWidth: "85%" }}>
+                  {/* Admin label */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <div style={{
+                      width: 24, height: 24, borderRadius: "50%",
+                      background: "linear-gradient(135deg, #B400FF, #00D4FF)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 10, fontWeight: 900, color: "white", flexShrink: 0
+                    }}>
+                      {msg.sender.charAt(0).toUpperCase()}
                     </div>
+                    <span style={{ color: "#00D4FF", fontSize: 11, fontWeight: 700 }}>
+                      {msg.sender}
+                    </span>
+                    <span style={{
+                      background: "rgba(180,0,255,0.2)",
+                      border: "1px solid rgba(180,0,255,0.4)",
+                      color: "#B400FF", fontSize: 8, fontWeight: 800,
+                      padding: "1px 6px", borderRadius: 100, letterSpacing: 1
+                    }}>ADMIN</span>
+                    <span style={{ color: "rgba(255,255,255,0.2)", fontSize: 10 }}>
+                      {timeAgo(msg.created_at)}
+                    </span>
                   </div>
-                  <span className="text-cyan-400 font-bold text-sm">
-                    {u.points} LP
+
+                  {/* Message bubble */}
+                  <div style={{
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: "4px 16px 16px 16px",
+                    padding: msg.media_url ? 0 : "10px 14px",
+                    overflow: "hidden"
+                  }}>
+                    {msg.media_type === "video" && msg.media_url && (
+                      <video src={msg.media_url}
+                        style={{ width: "100%", maxHeight: 240, objectFit: "cover", display: "block" }}
+                        controls playsInline />
+                    )}
+                    {msg.media_type === "image" && msg.media_url && (
+                      <img src={msg.media_url}
+                        style={{ width: "100%", maxHeight: 240, objectFit: "cover", display: "block" }} />
+                    )}
+                    {msg.message && (
+                      <p style={{
+                        color: "rgba(255,255,255,0.85)", fontSize: 13, lineHeight: 1.5,
+                        padding: msg.media_url ? "10px 14px" : 0
+                      }}>
+                        {msg.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* VIEW ONLY BAR for students */}
+            {!isAdmin && (
+              <div className="flex-shrink-0 px-4 py-3 border-t border-zinc-800">
+                <div style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 12, padding: "12px 16px",
+                  textAlign: "center"
+                }}>
+                  <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 12 }}>
+                    👀 View only — only admins can send messages
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ADMIN MESSAGE INPUT */}
+            {isAdmin && (
+              <AdminMessageInput
+                groupId={activeGroup.id}
+                sender={user}
+                onSent={() => loadMessages(activeGroup.id)}
+              />
+            )}
+          </div>
+        )}
+
+        {/* LEADERBOARD TAB */}
+        {activeTab === "leaderboard" && (
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+            {groupLeaderboard.map((u, i) => (
+              <div key={`${u.user_name}-${i}`}
+                className={`rounded-xl p-3 flex justify-between items-center border ${
+                  i === 0 ? "bg-yellow-500/10 border-yellow-500/40" :
+                  i === 1 ? "bg-zinc-400/10 border-zinc-400/40" :
+                  i === 2 ? "bg-orange-500/10 border-orange-500/40" :
+                  "bg-zinc-900 border-zinc-800"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-base w-6">
+                    {i < 3 ? medals[i] : `${i + 1}.`}
                   </span>
-                </div>
-              ))}
-              {groupLeaderboard.length === 0 && (
-                <p className="text-zinc-500 text-sm text-center py-4">
-                  No members yet
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* MEMBERS LIST */}
-          <div className="px-4">
-            <h2 className="text-sm font-bold text-zinc-300 mb-3 uppercase tracking-wider">
-              Members
-            </h2>
-            <div className="space-y-2">
-              {members.map((m, i) => (
-                <div
-                  key={`${m.user_name}-${i}`}
-                  className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex items-center gap-3"
-                >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-xs font-bold">
-                    {m.user_name.charAt(0).toUpperCase()}
+                  <div style={{
+                    width: 32, height: 32, borderRadius: "50%",
+                    background: "linear-gradient(135deg, #B400FF, #00D4FF)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 13, fontWeight: 900, color: "white"
+                  }}>
+                    {u.user_name.charAt(0).toUpperCase()}
                   </div>
-                  <p className="font-semibold text-sm">{m.user_name}</p>
-                  {m.user_name === USER && (
-                    <span className="ml-auto text-cyan-400 text-xs">You</span>
-                  )}
+                  <div>
+                    <p className="font-bold text-sm text-white">{u.user_name}</p>
+                    {u.school && <p className="text-zinc-500 text-xs">{u.school}</p>}
+                  </div>
                 </div>
-              ))}
-              {members.length === 0 && (
-                <p className="text-zinc-500 text-sm text-center py-4">
-                  No members yet
-                </p>
-              )}
-            </div>
+                <span className="text-cyan-400 font-bold text-sm">{u.points} LP</span>
+              </div>
+            ))}
+            {groupLeaderboard.length === 0 && (
+              <p className="text-zinc-500 text-sm text-center py-8">No members yet</p>
+            )}
           </div>
+        )}
 
-        </main>
+        {/* MEMBERS TAB */}
+        {activeTab === "members" && (
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+            {members.map((m, i) => (
+              <div key={`${m.user_name}-${i}`}
+                className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex items-center gap-3"
+              >
+                <div style={{
+                  width: 36, height: 36, borderRadius: "50%",
+                  background: "linear-gradient(135deg, #B400FF, #00D4FF)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 14, fontWeight: 900, color: "white"
+                }}>
+                  {m.user_name.charAt(0).toUpperCase()}
+                </div>
+                <p className="font-semibold text-sm text-white">{m.user_name}</p>
+                {m.user_name === user && (
+                  <span className="ml-auto text-cyan-400 text-xs font-bold">You</span>
+                )}
+              </div>
+            ))}
+            {members.length === 0 && (
+              <p className="text-zinc-500 text-sm text-center py-8">No members yet</p>
+            )}
+          </div>
+        )}
+
         <BottomNav />
       </div>
     )
   }
 
-  // GROUPS LIST VIEW
+  // ── GROUPS LIST ──────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col min-h-screen">
-      <main className="flex flex-col flex-1 overflow-y-auto pb-16 text-white">
+    <div className="flex flex-col h-full bg-black text-white overflow-hidden">
+      <main className="flex flex-col flex-1 overflow-y-auto pb-4">
 
-        {/* HEADER */}
         <div className="p-4 pb-2">
-          <button
-            onClick={() => router.push("/sessions")}
-            className="flex items-center gap-2 text-zinc-400 hover:text-white text-sm mb-3"
-          >
-            ← Back to Sessions
+          <button onClick={() => router.push("/sessions")}
+            className="text-zinc-500 text-sm mb-3 flex items-center gap-1">
+            ← Back
           </button>
           <h1 className="text-2xl font-bold text-cyan-400">Groups</h1>
-          <p className="text-zinc-500 text-xs mt-0.5">
-            Join a group to compete with your institution
-          </p>
+          <p className="text-zinc-500 text-xs mt-0.5">Compete together and earn LP as a team</p>
         </div>
 
-        {/* GROUPS LIST */}
         <div className="p-4 space-y-4">
           {groups.length === 0 && (
-            <p className="text-zinc-500 text-sm text-center py-8">
-              No groups yet — ask your institution to create one
-            </p>
+            <div style={{ textAlign: "center", padding: "40px 0" }}>
+              <p style={{ fontSize: 32, marginBottom: 8 }}>👥</p>
+              <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>No groups yet</p>
+              <p style={{ color: "rgba(255,255,255,0.2)", fontSize: 11, marginTop: 4 }}>
+                Ask your institution to create one
+              </p>
+            </div>
           )}
 
           {groups.map((group) => {
@@ -281,75 +448,50 @@ export default function Groups() {
             const isPending = memberStatus === "pending"
 
             return (
-              <div
-                key={group.id}
-                className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4"
-              >
-                {/* Group header */}
+              <div key={group.id} style={{
+                background: "#18181b",
+                border: "1px solid rgba(255,255,255,0.07)",
+                borderRadius: 20, padding: 16
+              }}>
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <h3 className="font-bold text-white text-base">
-                      {group.name}
-                    </h3>
+                    <h3 className="font-bold text-white text-base">{group.name}</h3>
                     {group.institution && (
-                      <p className="text-zinc-500 text-xs mt-0.5">
-                        {group.institution}
-                      </p>
+                      <p className="text-zinc-500 text-xs mt-0.5">{group.institution}</p>
                     )}
                   </div>
-                  <div className="bg-zinc-800 border border-cyan-500/30 rounded-xl px-2.5 py-1 text-center">
-                    <p className="text-cyan-400 font-bold text-sm">
-                      {group.total_lp} LP
-                    </p>
+                  <div style={{
+                    background: "rgba(0,212,255,0.1)",
+                    border: "1px solid rgba(0,212,255,0.3)",
+                    borderRadius: 10, padding: "4px 10px", textAlign: "center"
+                  }}>
+                    <p style={{ color: "#00D4FF", fontWeight: 800, fontSize: 14 }}>{group.total_lp}</p>
+                    <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 9 }}>LP</p>
                   </div>
                 </div>
 
                 {group.description && (
-                  <p className="text-zinc-400 text-xs mb-3">
-                    {group.description}
-                  </p>
+                  <p className="text-zinc-400 text-xs mb-3">{group.description}</p>
                 )}
 
-                {/* Member count */}
-                <p className="text-zinc-500 text-xs mb-3">
-                  👥 {group.member_count} members
-                </p>
+                <p className="text-zinc-500 text-xs mb-3">👥 {group.member_count} members</p>
 
-                {/* Action buttons */}
                 <div className="flex gap-2">
                   {isMember && (
-                    <>
-                      <button
-                        onClick={() => openGroup(group)}
-                        className="flex-1 py-2 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl text-sm font-semibold"
-                      >
-                        View Group
-                      </button>
-                    </>
-                  )}
-
-                  {isPending && (
-                    <div className="flex-1 py-2 bg-yellow-500/20 border border-yellow-500/40 rounded-xl text-sm font-semibold text-yellow-400 text-center">
-                      ⏳ Request Pending
-                    </div>
-                  )}
-
-                  {!memberStatus && (
-                    <button
-                      onClick={() => requestJoin(group.id)}
-                      disabled={loading}
-                      className="flex-1 py-2 bg-zinc-800 border border-zinc-600 hover:border-cyan-500 rounded-xl text-sm font-semibold text-zinc-300 hover:text-white transition-colors"
-                    >
-                      Request to Join
+                    <button onClick={() => openGroup(group)}
+                      className="flex-1 py-2.5 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl text-sm font-bold">
+                      Open Group
                     </button>
                   )}
-
-                  {isMember && (
-                    <button
-                      onClick={() => openGroup(group)}
-                      className="py-2 px-3 bg-zinc-800 border border-zinc-700 rounded-xl text-xs text-zinc-400"
-                    >
-                      👥 {group.member_count}
+                  {isPending && (
+                    <div className="flex-1 py-2.5 bg-yellow-500/20 border border-yellow-500/40 rounded-xl text-sm font-semibold text-yellow-400 text-center">
+                      ⏳ Pending
+                    </div>
+                  )}
+                  {!memberStatus && (
+                    <button onClick={() => requestJoin(group.id)} disabled={loading}
+                      className="flex-1 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm font-semibold text-zinc-300">
+                      Request to Join
                     </button>
                   )}
                 </div>
@@ -357,9 +499,107 @@ export default function Groups() {
             )
           })}
         </div>
-
       </main>
       <BottomNav />
+    </div>
+  )
+}
+
+// ── ADMIN MESSAGE INPUT COMPONENT ────────────────────────────────────────────
+function AdminMessageInput({
+  groupId, sender, onSent
+}: {
+  groupId: string
+  sender: string
+  onSent: () => void
+}) {
+  const [text, setText] = useState("")
+  const [sending, setSending] = useState(false)
+  const [uploading, setUploading] = useState(false)
+
+  async function sendMessage() {
+    if (!text.trim()) return
+    setSending(true)
+    await supabase.from("group_messages").insert({
+      group_id: groupId,
+      sender,
+      message: text.trim(),
+      media_type: "text"
+    })
+    setText("")
+    onSent()
+    setSending(false)
+  }
+
+  async function sendMedia(file: File) {
+    setUploading(true)
+    const ext = file.name.split(".").pop()
+    const fileName = `group-${groupId}-${Date.now()}.${ext}`
+
+    const { error } = await supabase.storage
+      .from("proof").upload(fileName, file, { upsert: true })
+
+    if (error) { alert(`Upload error: ${error.message}`); setUploading(false); return }
+
+    const { data: urlData } = supabase.storage.from("proof").getPublicUrl(fileName)
+    const isVideo = file.type.startsWith("video")
+
+    await supabase.from("group_messages").insert({
+      group_id: groupId,
+      sender,
+      message: text.trim() || "",
+      media_url: urlData.publicUrl,
+      media_type: isVideo ? "video" : "image"
+    })
+
+    setText("")
+    onSent()
+    setUploading(false)
+  }
+
+  return (
+    <div className="flex-shrink-0 border-t border-zinc-800 p-3">
+      <div style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 16, padding: "8px 12px",
+        display: "flex", alignItems: "center", gap: 8
+      }}>
+        {/* Media upload */}
+        <label style={{ flexShrink: 0, cursor: "pointer" }}>
+          <span style={{ fontSize: 20 }}>{uploading ? "⏳" : "📎"}</span>
+          <input type="file" accept="image/*,video/*"
+            className="hidden" disabled={uploading}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) sendMedia(file)
+            }} />
+        </label>
+
+        {/* Text input */}
+        <input
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") sendMessage() }}
+          placeholder="Send a message to the group..."
+          style={{
+            flex: 1, background: "transparent", border: "none",
+            color: "white", fontSize: 13, outline: "none"
+          }}
+        />
+
+        {/* Send button */}
+        <button onClick={sendMessage} disabled={sending || !text.trim()}
+          style={{
+            flexShrink: 0, padding: "6px 14px",
+            background: text.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "rgba(255,255,255,0.08)",
+            border: "none", borderRadius: 10,
+            color: text.trim() ? "white" : "rgba(255,255,255,0.3)",
+            fontWeight: 700, fontSize: 12, cursor: text.trim() ? "pointer" : "default"
+          }}>
+          {sending ? "..." : "Send"}
+        </button>
+      </div>
     </div>
   )
 }

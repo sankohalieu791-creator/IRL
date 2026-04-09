@@ -199,70 +199,102 @@ export default function AdminDashboard() {
   }
 
   async function updateProofStatus(id: string, status: string, userName: string, sessionId: string) {
-    const { error: statusError } = await supabase
-      .from("session_attempts")
-      .update({ status })
-      .eq("id", id)
+  const { error: statusError } = await supabase
+    .from("session_attempts")
+    .update({ status })
+    .eq("id", id)
 
-    if (statusError) {
-      alert(`Error: ${statusError.message}`)
-      return
-    }
+  if (statusError) {
+    alert(`Error: ${statusError.message}`)
+    return
+  }
 
-    if (status === "accepted") {
-      const { data: session } = await supabase
-        .from("sessions")
-        .select("points, title")
-        .eq("id", sessionId)
+  if (status === "accepted") {
+    const { data: session } = await supabase
+      .from("sessions")
+      .select("points, title")
+      .eq("id", sessionId)
+      .maybeSingle()
+
+    if (session) {
+      const { data: lb } = await supabase
+        .from("leaderboard")
+        .select("id, points")
+        .eq("user_name", userName)
         .maybeSingle()
 
-      if (session) {
-        const { data: lb } = await supabase
+      if (lb) {
+        await supabase
           .from("leaderboard")
-          .select("id, points")
-          .eq("user_name", userName)
-          .maybeSingle()
-
-        if (lb) {
-          await supabase
-            .from("leaderboard")
-            .update({ points: lb.points + session.points })
-            .eq("id", lb.id)
-        } else {
-          await supabase
-            .from("leaderboard")
-            .insert({ user_name: userName, points: session.points })
-        }
-
-        await supabase.from("notifications").insert({
-          user_name: userName,
-          title: "Proof Accepted! 🎉",
-          message: `Your proof for "${session.title}" was accepted. +${session.points} LP!`,
-          type: "proof_accepted",
-          read: false
-        })
+          .update({ points: lb.points + session.points })
+          .eq("id", lb.id)
+      } else {
+        await supabase
+          .from("leaderboard")
+          .insert({ user_name: userName, points: session.points })
       }
-    }
 
-    if (status === "declined") {
-      const { data: session } = await supabase
-        .from("sessions")
-        .select("title")
-        .eq("id", sessionId)
-        .maybeSingle()
+      // Update group LP if user is in any groups
+      const { data: userGroups } = await supabase
+        .from("group_members")
+        .select("group_id")
+        .eq("user_name", userName)
+        .eq("status", "accepted")
+
+      if (userGroups && userGroups.length > 0) {
+        for (const g of userGroups) {
+          const { data: groupMembers } = await supabase
+            .from("group_members")
+            .select("user_name")
+            .eq("group_id", g.group_id)
+            .eq("status", "accepted")
+
+          if (groupMembers) {
+            const usernames = groupMembers.map(m => m.user_name)
+            const { data: lbData } = await supabase
+              .from("leaderboard")
+              .select("points")
+              .in("user_name", usernames)
+
+            if (lbData) {
+              const totalLP = lbData.reduce((sum, u) => sum + u.points, 0)
+              await supabase.from("groups")
+                .update({ total_lp: totalLP })
+                .eq("id", g.group_id)
+            }
+          }
+        }
+      }
 
       await supabase.from("notifications").insert({
         user_name: userName,
-        title: "Proof Declined ❌",
-        message: `Your proof for "${session?.title || "a session"}" was declined. Try again!`,
-        type: "proof_declined",
+        title: "Proof Accepted! 🎉",
+        message: `Your proof for "${session.title}" was accepted. +${session.points} LP!`,
+        type: "proof_accepted",
         read: false
       })
     }
-
-    loadProofs()
-    alert(`Proof ${status}!`)
   }
+
+  if (status === "declined") {
+    const { data: session } = await supabase
+      .from("sessions")
+      .select("title")
+      .eq("id", sessionId)
+      .maybeSingle()
+
+    await supabase.from("notifications").insert({
+      user_name: userName,
+      title: "Proof Declined ❌",
+      message: `Your proof for "${session?.title || "a session"}" was declined. Try again!`,
+      type: "proof_declined",
+      read: false
+    })
+  }
+
+  loadProofs()
+  alert(`Proof ${status}!`)
+}
 
   async function createGroup() {
     if (!newGroup.name) return alert("Please enter a group name")
