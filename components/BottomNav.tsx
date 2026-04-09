@@ -50,30 +50,25 @@ export default function BottomNav() {
   ]
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/95 border-t border-zinc-800  z-50" style={{ 
+    <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/95 border-t border-zinc-800 flex z-50" style={{ 
       paddingBottom: "env(safe-area-inset-bottom, 8px)",
       bottom: "0px"
     }}>
-          <div className="flex" style={{ paddingTop: "8px", paddingBottom: "12px" }}>
-        {tabs.map(tab => {
-          const active = pathname === tab.href
-          return (
-            <button
-              key={tab.href}
-              onClick={() => router.push(tab.href)}
-              className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1"
-            >
-              {tab.icon(active)}
-              <span className={`text-[10px] font-semibold ${active ? "text-cyan-400" : "text-zinc-500"}`}>
-                {tab.label}
-              </span>
-            </button>
-          )
-        })}
-      </div>
-
-      {/* SAFE AREA SPACER */}
-      <div style={{ height: "env(safe-area-inset-bottom, 8px)" }} />
+      {tabs.map(tab => {
+        const active = pathname === tab.href
+        return (
+          <button
+            key={tab.href}
+            onClick={() => router.push(tab.href)}
+            className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1"
+          >
+            {tab.icon(active)}
+            <span className={`text-[10px] font-semibold ${active ? "text-cyan-400" : "text-zinc-500"}`}>
+              {tab.label}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
