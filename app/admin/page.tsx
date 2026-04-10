@@ -15,13 +15,8 @@ export default function AdminDashboard() {
   const [tab, setTab] = useState<Tab>("proofs")
   const [sessions, setSessions] = useState<any[]>([])
   const [newSession, setNewSession] = useState({
-    title: "",
-    type: "Quest",
-    skill_type: "Open Skill",
-    points: 50,
-    category: "",
-    creator: "",
-    image: ""
+    title: "", type: "Quest", skill_type: "Open Skill",
+    points: 50, category: "", creator: "", image: ""
   })
   const [codes, setCodes] = useState<any[]>([])
   const [newCode, setNewCode] = useState({ user_name: "", role: "admin" })
@@ -31,50 +26,50 @@ export default function AdminDashboard() {
   const [groups, setGroups] = useState<any[]>([])
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
   const [newGroup, setNewGroup] = useState({ name: "", description: "" })
+  const [activeGroupChat, setActiveGroupChat] = useState<any | null>(null)
+  const [groupMessages, setGroupMessages] = useState<any[]>([])
+  const [messageText, setMessageText] = useState("")
+  const [sendingMessage, setSendingMessage] = useState(false)
+  const [uploadingMedia, setUploadingMedia] = useState(false)
 
   useEffect(() => {
     const user = getUser()
     const school = getSchool()
-    if (!user) {
-      router.replace("/login")
-      return
-    }
+    if (!user) { router.replace("/login"); return }
     setADMIN(user)
     if (school) setSCHOOL(school)
   }, [])
 
+  useEffect(() => {
+    const load = async () => {
+      if (tab === "sessions") await loadSessions()
+      if (tab === "codes") await loadCodes()
+      if (tab === "proofs") await loadProofs()
+      if (tab === "students") await loadStudents()
+      if (tab === "groups") { await loadGroups(); await loadPendingMembers() }
+    }
+    load()
+  }, [tab])
+
   async function loadSessions() {
-    const { data } = await supabase
-      .from("sessions")
-      .select("*")
-      .order("created_at", { ascending: false })
+    const { data } = await supabase.from("sessions").select("*").order("created_at", { ascending: false })
     if (data) setSessions(data)
   }
 
   async function loadCodes() {
-    const { data } = await supabase
-      .from("invite_codes")
-      .select("*")
-      .order("created_at", { ascending: false })
+    const { data } = await supabase.from("invite_codes").select("*").order("created_at", { ascending: false })
     if (data) setCodes(data)
   }
 
   async function loadProofs() {
     const { data } = await supabase
-      .from("session_attempts")
-      .select("*")
+      .from("session_attempts").select("*")
       .not("proof_url", "is", null)
       .order("created_at", { ascending: false })
-
     if (!data) return
-
     const withTitles = await Promise.all(
       data.map(async (p) => {
-        const { data: session } = await supabase
-          .from("sessions")
-          .select("title")
-          .eq("id", p.session_id)
-          .maybeSingle()
+        const { data: session } = await supabase.from("sessions").select("title").eq("id", p.session_id).maybeSingle()
         return { ...p, session_title: session?.title || "Unknown" }
       })
     )
@@ -83,90 +78,86 @@ export default function AdminDashboard() {
 
   async function loadStudents() {
     const { data: users } = await supabase
-      .from("users")
-      .select("user_name, school")
-      .eq("role", "student")
-
+      .from("users").select("user_name, school").eq("role", "student")
     if (!users) return
-
     const withStats = await Promise.all(
       users.map(async (u) => {
         const { count: sessionCount } = await supabase
-          .from("session_attempts")
-          .select("*", { count: "exact", head: true })
-          .eq("user_name", u.user_name)
-
+          .from("session_attempts").select("*", { count: "exact", head: true }).eq("user_name", u.user_name)
         const { data: lb } = await supabase
-          .from("leaderboard")
-          .select("points")
-          .eq("user_name", u.user_name)
-          .maybeSingle()
-
-        return {
-          user_name: u.user_name,
-          school: u.school,
-          sessions: sessionCount || 0,
-          points: lb?.points || 0
-        }
+          .from("leaderboard").select("points").eq("user_name", u.user_name).maybeSingle()
+        return { user_name: u.user_name, school: u.school, sessions: sessionCount || 0, points: lb?.points || 0 }
       })
     )
-
     withStats.sort((a, b) => b.points - a.points)
     setStudents(withStats)
   }
 
   async function loadGroups() {
-    const { data } = await supabase
-      .from("groups")
-      .select("*")
+    const { data } = await supabase.from("groups").select("*")
     if (data) setGroups(data)
   }
 
   async function loadPendingMembers() {
-    const { data } = await supabase
-      .from("group_members")
-      .select("*")
-      .eq("status", "pending")
+    const { data } = await supabase.from("group_members").select("*").eq("status", "pending")
     if (data) setPendingMembers(data)
   }
 
-  useEffect(() => {
-    const load = async () => {
-      if (tab === "sessions") await loadSessions()
-      if (tab === "codes") await loadCodes()
-      if (tab === "proofs") await loadProofs()
-      if (tab === "students") await loadStudents()
-      if (tab === "groups") {
-        await loadGroups()
-        await loadPendingMembers()
-      }
-    }
-    load()
-  }, [tab])
+  async function loadGroupMessages(groupId: string) {
+    const { data } = await supabase
+      .from("group_messages").select("*")
+      .eq("group_id", groupId)
+      .order("created_at", { ascending: true })
+    if (data) setGroupMessages(data)
+  }
+
+  async function sendMessage(groupId: string) {
+    if (!messageText.trim()) return
+    setSendingMessage(true)
+    await supabase.from("group_messages").insert({
+      group_id: groupId, sender: ADMIN,
+      message: messageText.trim(), media_type: "text"
+    })
+    setMessageText("")
+    await loadGroupMessages(groupId)
+    setSendingMessage(false)
+  }
+
+  async function sendMedia(groupId: string, file: File) {
+    setUploadingMedia(true)
+    const ext = file.name.split(".").pop()
+    const fileName = `group-${groupId}-${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from("proof").upload(fileName, file, { upsert: true })
+    if (error) { alert(`Upload error: ${error.message}`); setUploadingMedia(false); return }
+    const { data: urlData } = supabase.storage.from("proof").getPublicUrl(fileName)
+    const isVideo = file.type.startsWith("video")
+    await supabase.from("group_messages").insert({
+      group_id: groupId, sender: ADMIN,
+      message: messageText.trim() || "",
+      media_url: urlData.publicUrl,
+      media_type: isVideo ? "video" : "image"
+    })
+    setMessageText("")
+    await loadGroupMessages(groupId)
+    setUploadingMedia(false)
+  }
 
   async function createSession() {
     if (!newSession.title) return alert("Please enter a title")
-    const { error } = await supabase
-      .from("sessions")
+    const { error } = await supabase.from("sessions")
       .insert({ ...newSession, creator: ADMIN, institution: SCHOOL })
     if (error) return alert(`Error: ${error.message}`)
-
-    const { data: allStudents } = await supabase
-      .from("users")
-      .select("user_name")
-      .eq("role", "student")
-
+    const { data: allStudents } = await supabase.from("users").select("user_name").eq("role", "student")
     if (allStudents && allStudents.length > 0) {
-      const notifs = allStudents.map(s => ({
-        user_name: s.user_name,
-        title: "New Session Available! ⚡",
-        message: `A new session "${newSession.title}" has been posted!`,
-        type: "new_session",
-        read: false
-      }))
-      await supabase.from("notifications").insert(notifs)
+      await supabase.from("notifications").insert(
+        allStudents.map(s => ({
+          user_name: s.user_name,
+          title: "New Session Available! ⚡",
+          message: `A new session "${newSession.title}" has been posted!`,
+          type: "new_session", read: false
+        }))
+      )
     }
-
     setNewSession({ title: "", type: "Quest", skill_type: "Open Skill", points: 50, category: "", creator: "", image: "" })
     loadSessions()
     alert("Session created!")
@@ -180,17 +171,14 @@ export default function AdminDashboard() {
   function generateRandomCode() {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
     let result = "IRL-"
-    for (let i = 0; i < 6; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
+    for (let i = 0; i < 6; i++) result += chars.charAt(Math.floor(Math.random() * chars.length))
     return result
   }
 
   async function createCode() {
     if (!newCode.user_name) return alert("Please enter a name")
     const code = generateRandomCode()
-    const { error } = await supabase
-      .from("invite_codes")
+    const { error } = await supabase.from("invite_codes")
       .insert({ code, user_name: newCode.user_name, school: SCHOOL, role: newCode.role, used: false })
     if (error) return alert(`Error: ${error.message}`)
     setGeneratedCode(code)
@@ -199,107 +187,67 @@ export default function AdminDashboard() {
   }
 
   async function updateProofStatus(id: string, status: string, userName: string, sessionId: string) {
-  const { error: statusError } = await supabase
-    .from("session_attempts")
-    .update({ status })
-    .eq("id", id)
+    const { error } = await supabase.from("session_attempts").update({ status }).eq("id", id)
+    if (error) { alert(`Error: ${error.message}`); return }
 
-  if (statusError) {
-    alert(`Error: ${statusError.message}`)
-    return
-  }
+    if (status === "accepted") {
+      const { data: session } = await supabase.from("sessions")
+        .select("points, title").eq("id", sessionId).maybeSingle()
+      if (session) {
+        const { data: lb } = await supabase.from("leaderboard")
+          .select("id, points").eq("user_name", userName).maybeSingle()
+        if (lb) {
+          await supabase.from("leaderboard").update({ points: lb.points + session.points }).eq("id", lb.id)
+        } else {
+          await supabase.from("leaderboard").insert({ user_name: userName, points: session.points })
+        }
 
-  if (status === "accepted") {
-    const { data: session } = await supabase
-      .from("sessions")
-      .select("points, title")
-      .eq("id", sessionId)
-      .maybeSingle()
-
-    if (session) {
-      const { data: lb } = await supabase
-        .from("leaderboard")
-        .select("id, points")
-        .eq("user_name", userName)
-        .maybeSingle()
-
-      if (lb) {
-        await supabase
-          .from("leaderboard")
-          .update({ points: lb.points + session.points })
-          .eq("id", lb.id)
-      } else {
-        await supabase
-          .from("leaderboard")
-          .insert({ user_name: userName, points: session.points })
-      }
-
-      // Update group LP if user is in any groups
-      const { data: userGroups } = await supabase
-        .from("group_members")
-        .select("group_id")
-        .eq("user_name", userName)
-        .eq("status", "accepted")
-
-      if (userGroups && userGroups.length > 0) {
-        for (const g of userGroups) {
-          const { data: groupMembers } = await supabase
-            .from("group_members")
-            .select("user_name")
-            .eq("group_id", g.group_id)
-            .eq("status", "accepted")
-
-          if (groupMembers) {
-            const usernames = groupMembers.map(m => m.user_name)
-            const { data: lbData } = await supabase
-              .from("leaderboard")
-              .select("points")
-              .in("user_name", usernames)
-
-            if (lbData) {
-              const totalLP = lbData.reduce((sum, u) => sum + u.points, 0)
-              await supabase.from("groups")
-                .update({ total_lp: totalLP })
-                .eq("id", g.group_id)
+        // Update group LP
+        const { data: userGroups } = await supabase.from("group_members")
+          .select("group_id").eq("user_name", userName).eq("status", "accepted")
+        if (userGroups && userGroups.length > 0) {
+          for (const g of userGroups) {
+            const { data: gMembers } = await supabase.from("group_members")
+              .select("user_name").eq("group_id", g.group_id).eq("status", "accepted")
+            if (gMembers) {
+              const usernames = gMembers.map(m => m.user_name)
+              const { data: lbData } = await supabase.from("leaderboard")
+                .select("points").in("user_name", usernames)
+              if (lbData) {
+                const totalLP = lbData.reduce((sum, u) => sum + u.points, 0)
+                await supabase.from("groups").update({ total_lp: totalLP }).eq("id", g.group_id)
+              }
             }
           }
         }
-      }
 
+        await supabase.from("notifications").insert({
+          user_name: userName,
+          title: "Proof Accepted! 🎉",
+          message: `Your proof for "${session.title}" was accepted. +${session.points} LP!`,
+          type: "proof_accepted", read: false
+        })
+      }
+    }
+
+    if (status === "declined") {
+      const { data: session } = await supabase.from("sessions")
+        .select("title").eq("id", sessionId).maybeSingle()
       await supabase.from("notifications").insert({
         user_name: userName,
-        title: "Proof Accepted! 🎉",
-        message: `Your proof for "${session.title}" was accepted. +${session.points} LP!`,
-        type: "proof_accepted",
-        read: false
+        title: "Proof Declined ❌",
+        message: `Your proof for "${session?.title || "a session"}" was declined. Try again!`,
+        type: "proof_declined", read: false
       })
     }
+
+    loadProofs()
+    alert(`Proof ${status}!`)
   }
-
-  if (status === "declined") {
-    const { data: session } = await supabase
-      .from("sessions")
-      .select("title")
-      .eq("id", sessionId)
-      .maybeSingle()
-
-    await supabase.from("notifications").insert({
-      user_name: userName,
-      title: "Proof Declined ❌",
-      message: `Your proof for "${session?.title || "a session"}" was declined. Try again!`,
-      type: "proof_declined",
-      read: false
-    })
-  }
-
-  loadProofs()
-  alert(`Proof ${status}!`)
-}
 
   async function createGroup() {
     if (!newGroup.name) return alert("Please enter a group name")
-    const { error } = await supabase
-      .from("groups")
+    const { error } = await supabase.from("groups")
       .insert({ name: newGroup.name, description: newGroup.description, institution: SCHOOL, total_lp: 0 })
     if (error) return alert(`Error: ${error.message}`)
     setNewGroup({ name: "", description: "" })
@@ -318,6 +266,15 @@ export default function AdminDashboard() {
     loadGroups()
   }
 
+  function timeAgo(dateStr: string) {
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const m = Math.floor(diff / 60000)
+    const h = Math.floor(diff / 3600000)
+    if (m < 1) return "just now"
+    if (m < 60) return `${m}m ago`
+    return `${h}h ago`
+  }
+
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: "proofs", label: "Proofs", icon: "📎" },
     { key: "sessions", label: "Sessions", icon: "⚡" },
@@ -326,6 +283,79 @@ export default function AdminDashboard() {
     { key: "groups", label: "Groups", icon: "🏘" },
     { key: "institutions", label: "Institutions", icon: "🏫" },
   ]
+
+  // GROUP CHAT VIEW
+  if (activeGroupChat) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
+        <div className="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex items-center gap-4">
+          <button onClick={() => setActiveGroupChat(null)}
+            className="text-zinc-400 hover:text-white text-sm">← Back</button>
+          <div>
+            <h1 className="text-lg font-bold text-cyan-400">{activeGroupChat.name} — Chat</h1>
+            <p className="text-zinc-500 text-xs">Sending as {ADMIN} (Admin)</p>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 max-w-2xl mx-auto w-full">
+          {groupMessages.length === 0 && (
+            <div className="text-center py-16 text-zinc-600">
+              <p className="text-4xl mb-3">💬</p>
+              <p>No messages yet. Send the first one.</p>
+            </div>
+          )}
+          {groupMessages.map(msg => (
+            <div key={msg.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-xs font-bold">
+                  {msg.sender.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-cyan-400 text-sm font-bold">{msg.sender}</span>
+                <span className="bg-purple-500/20 border border-purple-500/40 text-purple-400 text-[9px] font-bold px-2 py-0.5 rounded-full">ADMIN</span>
+                <span className="text-zinc-600 text-xs ml-auto">{timeAgo(msg.created_at)}</span>
+              </div>
+              {msg.media_type === "video" && msg.media_url && (
+                <video src={msg.media_url} controls className="w-full max-h-64 rounded-xl mb-2 object-cover" />
+              )}
+              {msg.media_type === "image" && msg.media_url && (
+                <img src={msg.media_url} className="w-full max-h-64 rounded-xl mb-2 object-cover" />
+              )}
+              {msg.message && (
+                <p className="text-zinc-200 text-sm">{msg.message}</p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Input */}
+        <div className="border-t border-zinc-800 p-4 max-w-2xl mx-auto w-full">
+          <div className="flex gap-3 items-center bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3">
+            <label className="cursor-pointer text-zinc-400 hover:text-white flex-shrink-0">
+              <span className="text-xl">{uploadingMedia ? "⏳" : "📎"}</span>
+              <input type="file" accept="image/*,video/*" className="hidden" disabled={uploadingMedia}
+                onChange={e => { const f = e.target.files?.[0]; if (f) sendMedia(activeGroupChat.id, f) }} />
+            </label>
+            <input
+              value={messageText}
+              onChange={e => setMessageText(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") sendMessage(activeGroupChat.id) }}
+              placeholder="Send a message to this group..."
+              className="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-zinc-600"
+            />
+            <button
+              onClick={() => sendMessage(activeGroupChat.id)}
+              disabled={sendingMessage || !messageText.trim()}
+              className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-30"
+              style={{ background: messageText.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "#27272a", color: "white" }}
+            >
+              {sendingMessage ? "..." : "Send"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -336,32 +366,24 @@ export default function AdminDashboard() {
           <h1 className="text-xl font-bold text-cyan-400">Admin Dashboard</h1>
           <p className="text-zinc-500 text-sm">{SCHOOL}</p>
         </div>
-        <button
-          onClick={() => { logout(); router.replace("/login") }}
-          className="text-sm text-red-400 border border-red-400/30 px-4 py-2 rounded-xl hover:bg-red-400/10 transition-colors"
-        >
+        <button onClick={() => { logout(); router.replace("/login") }}
+          className="text-sm text-red-400 border border-red-400/30 px-4 py-2 rounded-xl hover:bg-red-400/10">
           Log Out
         </button>
       </div>
 
-      {/* TAB BAR */}
+      {/* TABS */}
       <div className="bg-zinc-900 border-b border-zinc-800 px-6 flex gap-1 overflow-x-auto">
         {tabs.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
+          <button key={t.key} onClick={() => setTab(t.key)}
             className={`px-4 py-3.5 text-sm font-semibold transition-colors border-b-2 whitespace-nowrap ${
-              tab === t.key
-                ? "text-cyan-400 border-cyan-400"
-                : "text-zinc-500 border-transparent hover:text-white"
-            }`}
-          >
+              tab === t.key ? "text-cyan-400 border-cyan-400" : "text-zinc-500 border-transparent hover:text-white"
+            }`}>
             {t.icon} {t.label}
           </button>
         ))}
       </div>
 
-      {/* CONTENT */}
       <div className="max-w-4xl mx-auto p-6 space-y-6">
 
         {/* PROOFS */}
@@ -369,9 +391,7 @@ export default function AdminDashboard() {
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-white">Proof Submissions</h2>
             {proofs.length === 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">
-                No proofs submitted yet
-              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No proofs submitted yet</div>
             )}
             {proofs.map(p => (
               <div key={p.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
@@ -384,9 +404,7 @@ export default function AdminDashboard() {
                     p.status === "accepted" ? "bg-green-500/20 text-green-400" :
                     p.status === "declined" ? "bg-red-500/20 text-red-400" :
                     "bg-yellow-500/20 text-yellow-400"
-                  }`}>
-                    {p.status}
-                  </span>
+                  }`}>{p.status}</span>
                 </div>
                 {p.proof_url && (
                   <div className="mb-4 rounded-xl overflow-hidden">
@@ -399,16 +417,12 @@ export default function AdminDashboard() {
                 )}
                 {p.status === "submitted" && (
                   <div className="flex gap-3">
-                    <button
-                      onClick={() => updateProofStatus(p.id, "accepted", p.user_name, p.session_id)}
-                      className="flex-1 py-2.5 bg-green-500/20 border border-green-500/40 text-green-400 rounded-xl font-semibold"
-                    >
+                    <button onClick={() => updateProofStatus(p.id, "accepted", p.user_name, p.session_id)}
+                      className="flex-1 py-2.5 bg-green-500/20 border border-green-500/40 text-green-400 rounded-xl font-semibold">
                       ✅ Accept
                     </button>
-                    <button
-                      onClick={() => updateProofStatus(p.id, "declined", p.user_name, p.session_id)}
-                      className="flex-1 py-2.5 bg-red-500/20 border border-red-500/40 text-red-400 rounded-xl font-semibold"
-                    >
+                    <button onClick={() => updateProofStatus(p.id, "declined", p.user_name, p.session_id)}
+                      className="flex-1 py-2.5 bg-red-500/20 border border-red-500/40 text-red-400 rounded-xl font-semibold">
                       ❌ Decline
                     </button>
                   </div>
@@ -423,93 +437,54 @@ export default function AdminDashboard() {
           <div className="space-y-4">
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
               <h2 className="text-lg font-bold text-white">Create Session</h2>
-              <input
-                placeholder="Session title"
-                value={newSession.title}
+              <input placeholder="Session title" value={newSession.title}
                 onChange={e => setNewSession(p => ({ ...p, title: e.target.value }))}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400"
-              />
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
               <div className="grid grid-cols-2 gap-3">
-                <select
-                  value={newSession.type}
-                  onChange={e => setNewSession(p => ({ ...p, type: e.target.value }))}
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400"
-                >
-                  <option>Quest</option>
-                  <option>Challenge</option>
-                  <option>Activity</option>
+                <select value={newSession.type} onChange={e => setNewSession(p => ({ ...p, type: e.target.value }))}
+                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400">
+                  <option>Quest</option><option>Challenge</option><option>Activity</option>
                 </select>
-                <select
-                  value={newSession.skill_type}
-                  onChange={e => setNewSession(p => ({ ...p, skill_type: e.target.value }))}
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400"
-                >
-                  <option>Open Skill</option>
-                  <option>Competitive</option>
+                <select value={newSession.skill_type} onChange={e => setNewSession(p => ({ ...p, skill_type: e.target.value }))}
+                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400">
+                  <option>Open Skill</option><option>Competitive</option>
                 </select>
-                <input
-                  placeholder="Category (e.g. Sport)"
-                  value={newSession.category}
+                <input placeholder="Category (e.g. Sport)" value={newSession.category}
                   onChange={e => setNewSession(p => ({ ...p, category: e.target.value }))}
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400"
-                />
-                <input
-                  type="number"
-                  placeholder="LP points"
-                  value={newSession.points}
+                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+                <input type="number" placeholder="LP points" value={newSession.points}
                   onChange={e => setNewSession(p => ({ ...p, points: Number(e.target.value) }))}
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400"
-                />
+                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400" />
               </div>
-              <input
-                placeholder="Image URL (optional)"
-                value={newSession.image}
+              <input placeholder="Image URL (optional)" value={newSession.image}
                 onChange={e => setNewSession(p => ({ ...p, image: e.target.value }))}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400"
-              />
-              {newSession.image ? (
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+              {newSession.image && (
                 <div className="rounded-xl overflow-hidden h-32">
-                  <img
-                    src={newSession.image}
-                    className="w-full h-full object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }}
-                  />
+                  <img src={newSession.image} className="w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }} />
                 </div>
-              ) : null}
-              <button
-                onClick={createSession}
-                className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold"
-              >
+              )}
+              <button onClick={createSession}
+                className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
                 ⚡ Create Session
               </button>
             </div>
-
             <h2 className="text-lg font-bold text-white">All Sessions</h2>
             {sessions.length === 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">
-                No sessions yet
-              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No sessions yet</div>
             )}
             {sessions.map(s => (
               <div key={s.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-                {s.image && (
-                  <img
-                    src={s.image}
-                    className="w-full h-32 object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }}
-                  />
-                )}
+                {s.image && <img src={s.image} className="w-full h-32 object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }} />}
                 <div className="p-5 flex justify-between items-center">
                   <div>
                     <p className="font-bold text-white">{s.title}</p>
                     <p className="text-zinc-500 text-sm">{s.type} · {s.skill_type} · ⚡ {s.points} LP</p>
                   </div>
-                  <button
-                    onClick={() => deleteSession(s.id)}
-                    className="text-red-400 text-sm border border-red-400/30 px-4 py-2 rounded-xl"
-                  >
-                    Delete
-                  </button>
+                  <button onClick={() => deleteSession(s.id)}
+                    className="text-red-400 text-sm border border-red-400/30 px-4 py-2 rounded-xl">Delete</button>
                 </div>
               </div>
             ))}
@@ -521,11 +496,9 @@ export default function AdminDashboard() {
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-white">All Students</h2>
             {students.length === 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">
-                No students signed up yet
-              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No students yet</div>
             )}
-            {students.map((s) => (
+            {students.map(s => (
               <div key={s.user_name} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex justify-between items-center">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center font-bold text-white">
@@ -547,31 +520,23 @@ export default function AdminDashboard() {
           <div className="space-y-4">
             {generatedCode && (
               <div className="bg-cyan-400/10 border border-cyan-400/40 rounded-2xl p-6 text-center">
-                <p className="text-zinc-400 text-sm mb-2">New admin code generated</p>
+                <p className="text-zinc-400 text-sm mb-2">New code generated</p>
                 <p className="text-4xl font-black text-cyan-400 tracking-widest">{generatedCode}</p>
               </div>
             )}
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
               <h2 className="text-lg font-bold text-white">Generate Admin Code</h2>
-              <input
-                placeholder="Admin name"
-                value={newCode.user_name}
+              <input placeholder="Admin name" value={newCode.user_name}
                 onChange={e => setNewCode(p => ({ ...p, user_name: e.target.value }))}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400"
-              />
-              <button
-                onClick={createCode}
-                className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold"
-              >
-                🔑 Generate Admin Code
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+              <button onClick={createCode}
+                className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
+                🔑 Generate Code
               </button>
             </div>
-
             <h2 className="text-lg font-bold text-white">All Codes</h2>
             {codes.length === 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">
-                No codes yet
-              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No codes yet</div>
             )}
             {codes.map(c => (
               <div key={c.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex justify-between items-center">
@@ -581,9 +546,7 @@ export default function AdminDashboard() {
                 </div>
                 <span className={`text-sm px-3 py-1 rounded-full font-semibold ${
                   c.used ? "bg-green-500/20 text-green-400" : "bg-zinc-700 text-zinc-400"
-                }`}>
-                  {c.used ? "Used" : "Unused"}
-                </span>
+                }`}>{c.used ? "Used" : "Unused"}</span>
               </div>
             ))}
           </div>
@@ -600,16 +563,12 @@ export default function AdminDashboard() {
                     <p className="font-bold text-white mb-1">{m.user_name}</p>
                     <p className="text-zinc-500 text-sm mb-4">wants to join a group</p>
                     <div className="flex gap-3">
-                      <button
-                        onClick={() => handleMemberRequest(m.id, "accepted")}
-                        className="flex-1 py-2.5 bg-green-500/20 border border-green-500/40 text-green-400 rounded-xl font-semibold"
-                      >
+                      <button onClick={() => handleMemberRequest(m.id, "accepted")}
+                        className="flex-1 py-2.5 bg-green-500/20 border border-green-500/40 text-green-400 rounded-xl font-semibold">
                         ✅ Accept
                       </button>
-                      <button
-                        onClick={() => handleMemberRequest(m.id, "declined")}
-                        className="flex-1 py-2.5 bg-red-500/20 border border-red-500/40 text-red-400 rounded-xl font-semibold"
-                      >
+                      <button onClick={() => handleMemberRequest(m.id, "declined")}
+                        className="flex-1 py-2.5 bg-red-500/20 border border-red-500/40 text-red-400 rounded-xl font-semibold">
                         ❌ Decline
                       </button>
                     </div>
@@ -620,44 +579,43 @@ export default function AdminDashboard() {
 
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
               <h2 className="text-lg font-bold text-white">Create Group</h2>
-              <input
-                placeholder="Group name"
-                value={newGroup.name}
+              <input placeholder="Group name" value={newGroup.name}
                 onChange={e => setNewGroup(p => ({ ...p, name: e.target.value }))}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400"
-              />
-              <input
-                placeholder="Description (optional)"
-                value={newGroup.description}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+              <input placeholder="Description (optional)" value={newGroup.description}
                 onChange={e => setNewGroup(p => ({ ...p, description: e.target.value }))}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400"
-              />
-              <button
-                onClick={createGroup}
-                className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold"
-              >
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+              <button onClick={createGroup}
+                className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
                 🏘 Create Group
               </button>
             </div>
 
             <h2 className="text-lg font-bold text-white">All Groups</h2>
             {groups.length === 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">
-                No groups yet
-              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No groups yet</div>
             )}
             {groups.map(g => (
-              <div key={g.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex justify-between items-center">
-                <div>
-                  <p className="font-bold text-white">{g.name}</p>
-                  {g.description && <p className="text-zinc-500 text-sm">{g.description}</p>}
-                  <p className="text-zinc-600 text-xs mt-1">⚡ {g.total_lp || 0} LP</p>
+              <div key={g.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <p className="font-bold text-white text-base">{g.name}</p>
+                    {g.description && <p className="text-zinc-500 text-sm">{g.description}</p>}
+                    <p className="text-zinc-600 text-xs mt-1">⚡ {g.total_lp || 0} LP</p>
+                  </div>
+                  <button onClick={() => deleteGroup(g.id)}
+                    className="text-red-400 text-sm border border-red-400/30 px-3 py-1.5 rounded-xl">
+                    🗑 Delete
+                  </button>
                 </div>
                 <button
-                  onClick={() => deleteGroup(g.id)}
-                  className="text-red-400 text-sm border border-red-400/30 px-4 py-2 rounded-xl"
+                  onClick={() => {
+                    setActiveGroupChat(g)
+                    loadGroupMessages(g.id)
+                  }}
+                  className="w-full py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm font-semibold text-zinc-300 hover:border-cyan-500 hover:text-white transition-colors"
                 >
-                  🗑 Delete
+                  💬 Send Message to Group
                 </button>
               </div>
             ))}
