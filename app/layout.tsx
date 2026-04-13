@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import "./globals.css"
 import AuthGuard from "@/components/AuthGuard"
+import { Analytics } from "@vercel/analytics/next"
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -38,6 +39,7 @@ export default function RootLayout({
       </head>
       <body className="bg-black min-h-screen overflow-hidden">
         <AuthGuard>{children}</AuthGuard>
+        <Analytics />
       </body>
     </html>
   )
