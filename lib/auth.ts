@@ -134,19 +134,26 @@ export async function login(codeOrUsername: string, password: string) {
 function saveToStorage(userName: string, school: string, role: string) {
   if (typeof window === "undefined") return
 
-  localStorage.setItem("irl_user", userName)
-  localStorage.setItem("irl_school", school)
-  localStorage.setItem("irl_role", role)
-  sessionStorage.setItem("irl_user", userName)
-  sessionStorage.setItem("irl_school", school)
-  sessionStorage.setItem("irl_role", role)
+  try {
+    localStorage.setItem("irl_user", userName)
+    localStorage.setItem("irl_school", school)
+    localStorage.setItem("irl_role", role)
+  } catch {}
+
+  try {
+    sessionStorage.setItem("irl_user", userName)
+    sessionStorage.setItem("irl_school", school)
+    sessionStorage.setItem("irl_role", role)
+  } catch {}
 
   const expires = new Date()
-  expires.setFullYear(expires.getFullYear() + 1)
-  document.cookie = `irl_user=${userName}; expires=${expires.toUTCString()}; path=/`
-  document.cookie = `irl_school=${school}; expires=${expires.toUTCString()}; path=/`
-  document.cookie = `irl_role=${role}; expires=${expires.toUTCString()}; path=/`
+  expires.setFullYear(expires.getFullYear() + 2)
+  const cookieOptions = `expires=${expires.toUTCString()}; path=/; SameSite=Lax`
+  document.cookie = `irl_user=${encodeURIComponent(userName)}; ${cookieOptions}`
+  document.cookie = `irl_school=${encodeURIComponent(school)}; ${cookieOptions}`
+  document.cookie = `irl_role=${encodeURIComponent(role)}; ${cookieOptions}`
 }
+
 
 export function getUser(): string | null {
   if (typeof window === "undefined") return null
@@ -171,9 +178,12 @@ export function getRole(): string | null {
 
 function getCookieValue(name: string): string | null {
   if (typeof document === "undefined") return null
-  const cookies = document.cookie.split(";")
-  const cookie = cookies.find(c => c.trim().startsWith(`${name}=`))
-  return cookie ? cookie.split("=")[1] : null
+  try {
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
+    return match ? decodeURIComponent(match[2]) : null
+  } catch {
+    return null
+  }
 }
 
 export function isAdmin(): boolean {
