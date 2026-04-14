@@ -99,25 +99,35 @@ export async function signUp(code: string, password: string, username?: string, 
   return { success: true, role: invite.role }
 }
 
-export async function login(code: string, password: string) {
-  const { data: user, error } = await supabase
+// ✅ UPDATED LOGIN FUNCTION (fix admin login bug)
+export async function login(codeOrUsername: string, password: string) {
+  // First try finding by invite code
+  let user: any = null
+
+  const { data: byCode } = await supabase
     .from("users")
     .select("*")
-    .eq("code", code.toUpperCase())
+    .eq("code", codeOrUsername.toUpperCase())
     .maybeSingle()
 
-  if (error || !user) {
-    return { error: "Invalid code or password" }
+  if (byCode) {
+    user = byCode
+  } else {
+    // Try finding by username directly (for admins who already signed up)
+    const { data: byUsername } = await supabase
+      .from("users")
+      .select("*")
+      .eq("user_name", codeOrUsername)
+      .maybeSingle()
+    if (byUsername) user = byUsername
   }
+
+  if (!user) return { error: "Invalid code or password" }
 
   const passwordMatch = await bcrypt.compare(password, user.password)
-
-  if (!passwordMatch) {
-    return { error: "Invalid code or password" }
-  }
+  if (!passwordMatch) return { error: "Invalid code or password" }
 
   saveToStorage(user.user_name, user.school, user.role)
-
   return { success: true, role: user.role }
 }
 

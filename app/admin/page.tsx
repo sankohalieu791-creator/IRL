@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { getUser, getSchool, logout } from "@/lib/auth"
 import InstitutionsTab from "@/components/InstitutionsTab"
 
-type Tab = "proofs" | "sessions" | "students" | "codes" | "groups" | "institutions"
+type Tab = "proofs" | "sessions" | "students" | "codes" | "groups" | "institutions" | "rewards"
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -32,6 +32,19 @@ export default function AdminDashboard() {
   const [sendingMessage, setSendingMessage] = useState(false)
   const [uploadingMedia, setUploadingMedia] = useState(false)
 
+  // Rewards state
+  const [rewards, setRewards] = useState<any[]>([])
+  const [newReward, setNewReward] = useState({
+    title: "",
+    description: "",
+    points_required: 500,
+    icon: "",
+    reward_type: "physical",
+    redemption_info: "",
+    business_name: "",
+    active: true
+  })
+
   useEffect(() => {
     const user = getUser()
     const school = getSchool()
@@ -47,6 +60,7 @@ export default function AdminDashboard() {
       if (tab === "proofs") await loadProofs()
       if (tab === "students") await loadStudents()
       if (tab === "groups") { await loadGroups(); await loadPendingMembers() }
+      if (tab === "rewards") await loadRewards()
     }
     load()
   }, [tab])
@@ -109,6 +123,49 @@ export default function AdminDashboard() {
       .eq("group_id", groupId)
       .order("created_at", { ascending: true })
     if (data) setGroupMessages(data)
+  }
+
+  async function loadRewards() {
+    const { data } = await supabase.from("rewards").select("*").order("points_required", { ascending: true })
+    if (data) setRewards(data)
+  }
+
+  async function createReward() {
+    if (!newReward.title) return alert("Please enter a reward title")
+    if (!newReward.business_name) return alert("Please enter the business or org name")
+    if (!newReward.points_required) return alert("Please enter LP cost")
+
+    const { error } = await supabase.from("rewards").insert({
+      title: newReward.title,
+      description: newReward.description,
+      points_required: newReward.points_required,
+      icon: newReward.icon || "🎁",
+      reward_type: newReward.reward_type,
+      redemption_info: newReward.redemption_info,
+      business_name: newReward.business_name,
+      active: true,
+      created_by: ADMIN
+    })
+
+    if (error) return alert(`Error: ${error.message}`)
+
+    setNewReward({
+      title: "", description: "", points_required: 500, icon: "",
+      reward_type: "physical", redemption_info: "", business_name: "", active: true
+    })
+    loadRewards()
+    alert("Reward created!")
+  }
+
+  async function toggleRewardActive(id: string, current: boolean) {
+    await supabase.from("rewards").update({ active: !current }).eq("id", id)
+    loadRewards()
+  }
+
+  async function deleteReward(id: string) {
+    if (!confirm("Delete this reward?")) return
+    await supabase.from("rewards").delete().eq("id", id)
+    loadRewards()
   }
 
   async function sendMessage(groupId: string) {
@@ -202,7 +259,6 @@ export default function AdminDashboard() {
           await supabase.from("leaderboard").insert({ user_name: userName, points: session.points })
         }
 
-        // Update group LP
         const { data: userGroups } = await supabase.from("group_members")
           .select("group_id").eq("user_name", userName).eq("status", "accepted")
         if (userGroups && userGroups.length > 0) {
@@ -281,6 +337,7 @@ export default function AdminDashboard() {
     { key: "students", label: "Students", icon: "👥" },
     { key: "codes", label: "Codes", icon: "🔑" },
     { key: "groups", label: "Groups", icon: "🏘" },
+    { key: "rewards", label: "Rewards", icon: "🎁" },
     { key: "institutions", label: "Institutions", icon: "🏫" },
   ]
 
@@ -296,8 +353,6 @@ export default function AdminDashboard() {
             <p className="text-zinc-500 text-xs">Sending as {ADMIN} (Admin)</p>
           </div>
         </div>
-
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4 max-w-2xl mx-auto w-full">
           {groupMessages.length === 0 && (
             <div className="text-center py-16 text-zinc-600">
@@ -321,14 +376,10 @@ export default function AdminDashboard() {
               {msg.media_type === "image" && msg.media_url && (
                 <img src={msg.media_url} className="w-full max-h-64 rounded-xl mb-2 object-cover" />
               )}
-              {msg.message && (
-                <p className="text-zinc-200 text-sm">{msg.message}</p>
-              )}
+              {msg.message && <p className="text-zinc-200 text-sm">{msg.message}</p>}
             </div>
           ))}
         </div>
-
-        {/* Input */}
         <div className="border-t border-zinc-800 p-4 max-w-2xl mx-auto w-full">
           <div className="flex gap-3 items-center bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3">
             <label className="cursor-pointer text-zinc-400 hover:text-white flex-shrink-0">
@@ -336,19 +387,14 @@ export default function AdminDashboard() {
               <input type="file" accept="image/*,video/*" className="hidden" disabled={uploadingMedia}
                 onChange={e => { const f = e.target.files?.[0]; if (f) sendMedia(activeGroupChat.id, f) }} />
             </label>
-            <input
-              value={messageText}
-              onChange={e => setMessageText(e.target.value)}
+            <input value={messageText} onChange={e => setMessageText(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") sendMessage(activeGroupChat.id) }}
               placeholder="Send a message to this group..."
-              className="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-zinc-600"
-            />
-            <button
-              onClick={() => sendMessage(activeGroupChat.id)}
+              className="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-zinc-600" />
+            <button onClick={() => sendMessage(activeGroupChat.id)}
               disabled={sendingMessage || !messageText.trim()}
               className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-30"
-              style={{ background: messageText.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "#27272a", color: "white" }}
-            >
+              style={{ background: messageText.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "#27272a", color: "white" }}>
               {sendingMessage ? "..." : "Send"}
             </button>
           </div>
@@ -360,7 +406,6 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
 
-      {/* HEADER */}
       <div className="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
         <div>
           <h1 className="text-xl font-bold text-cyan-400">Admin Dashboard</h1>
@@ -372,7 +417,6 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* TABS */}
       <div className="bg-zinc-900 border-b border-zinc-800 px-6 flex gap-1 overflow-x-auto">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
@@ -520,15 +564,22 @@ export default function AdminDashboard() {
           <div className="space-y-4">
             {generatedCode && (
               <div className="bg-cyan-400/10 border border-cyan-400/40 rounded-2xl p-6 text-center">
-                <p className="text-zinc-400 text-sm mb-2">New code generated</p>
+                <p className="text-zinc-400 text-sm mb-2">New code generated — share this with the admin</p>
                 <p className="text-4xl font-black text-cyan-400 tracking-widest">{generatedCode}</p>
+                <p className="text-zinc-500 text-xs mt-2">They use this code + choose their own password on the login page</p>
               </div>
             )}
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
               <h2 className="text-lg font-bold text-white">Generate Admin Code</h2>
+              <p className="text-zinc-500 text-sm">The new admin uses this code on the login page and sets their own password.</p>
               <input placeholder="Admin name" value={newCode.user_name}
                 onChange={e => setNewCode(p => ({ ...p, user_name: e.target.value }))}
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+              <select value={newCode.role} onChange={e => setNewCode(p => ({ ...p, role: e.target.value }))}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400">
+                <option value="admin">Admin</option>
+                <option value="student">Student</option>
+              </select>
               <button onClick={createCode}
                 className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
                 🔑 Generate Code
@@ -576,7 +627,6 @@ export default function AdminDashboard() {
                 ))}
               </>
             )}
-
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
               <h2 className="text-lg font-bold text-white">Create Group</h2>
               <input placeholder="Group name" value={newGroup.name}
@@ -590,7 +640,6 @@ export default function AdminDashboard() {
                 🏘 Create Group
               </button>
             </div>
-
             <h2 className="text-lg font-bold text-white">All Groups</h2>
             {groups.length === 0 && (
               <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No groups yet</div>
@@ -609,14 +658,110 @@ export default function AdminDashboard() {
                   </button>
                 </div>
                 <button
-                  onClick={() => {
-                    setActiveGroupChat(g)
-                    loadGroupMessages(g.id)
-                  }}
-                  className="w-full py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm font-semibold text-zinc-300 hover:border-cyan-500 hover:text-white transition-colors"
-                >
+                  onClick={() => { setActiveGroupChat(g); loadGroupMessages(g.id) }}
+                  className="w-full py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm font-semibold text-zinc-300 hover:border-cyan-500 hover:text-white transition-colors">
                   💬 Send Message to Group
                 </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* REWARDS */}
+        {tab === "rewards" && (
+          <div className="space-y-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
+              <h2 className="text-lg font-bold text-white">Add New Reward</h2>
+              <p className="text-zinc-500 text-sm">Add real world or digital rewards from your org or business partners.</p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <input placeholder="Business / Org name e.g. Nando's"
+                  value={newReward.business_name}
+                  onChange={e => setNewReward(p => ({ ...p, business_name: e.target.value }))}
+                  className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+
+                <input placeholder="Reward title e.g. Free Wings"
+                  value={newReward.title}
+                  onChange={e => setNewReward(p => ({ ...p, title: e.target.value }))}
+                  className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+
+                <input placeholder="Description e.g. Free wings when you spend £5"
+                  value={newReward.description}
+                  onChange={e => setNewReward(p => ({ ...p, description: e.target.value }))}
+                  className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+
+                <input type="number" placeholder="LP cost e.g. 3000"
+                  value={newReward.points_required}
+                  onChange={e => setNewReward(p => ({ ...p, points_required: Number(e.target.value) }))}
+                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400" />
+
+                <input placeholder="Emoji icon e.g. 🍗"
+                  value={newReward.icon}
+                  onChange={e => setNewReward(p => ({ ...p, icon: e.target.value }))}
+                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+
+                <select value={newReward.reward_type}
+                  onChange={e => setNewReward(p => ({ ...p, reward_type: e.target.value }))}
+                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400">
+                  <option value="physical">Physical — shown in store</option>
+                  <option value="digital">Digital — code or link</option>
+                  <option value="voucher">Voucher — printed ticket</option>
+                </select>
+
+                <input placeholder="Redemption info e.g. Show ticket at counter"
+                  value={newReward.redemption_info}
+                  onChange={e => setNewReward(p => ({ ...p, redemption_info: e.target.value }))}
+                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+              </div>
+
+              <button onClick={createReward}
+                className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
+                🎁 Add Reward
+              </button>
+            </div>
+
+            <h2 className="text-lg font-bold text-white">All Rewards</h2>
+            {rewards.length === 0 && (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">
+                No rewards added yet — add your first one above
+              </div>
+            )}
+            {rewards.map(r => (
+              <div key={r.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className="w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center text-2xl flex-shrink-0">
+                      {r.icon || "🎁"}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-zinc-400 text-xs font-bold uppercase tracking-wider mb-0.5">{r.business_name}</p>
+                      <p className="font-bold text-white text-sm">{r.title}</p>
+                      {r.description && <p className="text-zinc-500 text-xs mt-0.5">{r.description}</p>}
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-cyan-400 text-xs font-bold">⚡ {r.points_required} LP</span>
+                        <span className="text-zinc-600 text-xs">·</span>
+                        <span className="text-zinc-500 text-xs capitalize">{r.reward_type}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                          r.active ? "bg-green-500/20 text-green-400" : "bg-zinc-700 text-zinc-500"
+                        }`}>{r.active ? "Active" : "Hidden"}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 flex-shrink-0">
+                    <button onClick={() => toggleRewardActive(r.id, r.active)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border ${
+                        r.active
+                          ? "border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10"
+                          : "border-green-500/40 text-green-400 hover:bg-green-500/10"
+                      }`}>
+                      {r.active ? "Hide" : "Show"}
+                    </button>
+                    <button onClick={() => deleteReward(r.id)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-400/30 text-red-400 hover:bg-red-400/10">
+                      Delete
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
