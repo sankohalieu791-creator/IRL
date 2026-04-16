@@ -1,13 +1,13 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import BottomNav from "@/components/BottomNav"
 import NotificationBell from "@/components/NotificationBell"
 import { supabase } from "@/lib/supabase"
 import { getUser, getSchool } from "@/lib/auth"
 
-export default function Sessions() {
+function SessionsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const highlightSession = searchParams.get("session")
@@ -41,7 +41,6 @@ export default function Sessions() {
     }
   }, [user])
 
-  // Auto open specific session from Hub
   useEffect(() => {
     if (!highlightSession || sessions.length === 0) return
     setTimeout(() => {
@@ -51,7 +50,6 @@ export default function Sessions() {
     }, 300)
   }, [highlightSession, sessions])
 
-  // Live timer ticker
   useEffect(() => {
     const interval = setInterval(() => setSessions(prev => [...prev]), 1000)
     return () => clearInterval(interval)
@@ -59,53 +57,28 @@ export default function Sessions() {
 
   async function loadTicker() {
     const items: string[] = []
-
-    // Top 3 leaderboard
     const { data: lb } = await supabase
-      .from("leaderboard")
-      .select("user_name, points")
-      .order("points", { ascending: false })
-      .limit(3)
-
+      .from("leaderboard").select("user_name, points")
+      .order("points", { ascending: false }).limit(3)
     if (lb && lb.length > 0) {
       const medals = ["🥇", "🥈", "🥉"]
-      lb.forEach((u, i) => {
-        items.push(`${medals[i]} ${u.user_name} is #${i + 1} with ${u.points} LP`)
-      })
+      lb.forEach((u, i) => items.push(`${medals[i]} ${u.user_name} is #${i + 1} with ${u.points} LP`))
     }
-
-    // Recent hub posts
     const { data: posts } = await supabase
-      .from("hub_posts")
-      .select("user_name, session_title")
-      .order("created_at", { ascending: false })
-      .limit(3)
-
+      .from("hub_posts").select("user_name, session_title")
+      .order("created_at", { ascending: false }).limit(3)
     if (posts && posts.length > 0) {
-      posts.forEach(p => {
-        items.push(`⚡ ${p.user_name} just posted "${p.session_title}" on the Hub`)
-      })
+      posts.forEach(p => items.push(`⚡ ${p.user_name} just posted "${p.session_title}" on the Hub`))
     }
-
-    // Recent accepted proofs
     const { data: accepted } = await supabase
-      .from("session_attempts")
-      .select("user_name, session_id")
-      .eq("status", "accepted")
-      .order("created_at", { ascending: false })
-      .limit(3)
-
+      .from("session_attempts").select("user_name, session_id")
+      .eq("status", "accepted").order("created_at", { ascending: false }).limit(3)
     if (accepted && accepted.length > 0) {
       for (const a of accepted) {
-        const { data: s } = await supabase
-          .from("sessions")
-          .select("title")
-          .eq("id", a.session_id)
-          .maybeSingle()
+        const { data: s } = await supabase.from("sessions").select("title").eq("id", a.session_id).maybeSingle()
         if (s) items.push(`✅ ${a.user_name} completed "${s.title}"`)
       }
     }
-
     if (items.length > 0) setTicker(items)
   }
 
@@ -126,8 +99,7 @@ export default function Sessions() {
 
   async function loadAttempts() {
     const { data } = await supabase
-      .from("session_attempts")
-      .select("session_id, status, created_at")
+      .from("session_attempts").select("session_id, status, created_at")
       .eq("user_name", user)
     if (!data) return
     const map: Record<string, any> = {}
@@ -139,23 +111,14 @@ export default function Sessions() {
     const { data: existing } = await supabase
       .from("session_attempts").select("id")
       .eq("user_name", user).eq("session_id", session.id).maybeSingle()
-
     if (existing) { setActiveUpload(session.id); return }
-
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-
     await supabase.from("session_attempts").insert({
       user_name: user, session_id: session.id, status: "pending"
     })
     await supabase.from("sessions").update({ expires_at: expiresAt }).eq("id", session.id)
-
-    setSessions(prev => prev.map(s =>
-      s.id === session.id ? { ...s, expires_at: expiresAt } : s
-    ))
-    setAttempts(prev => ({
-      ...prev,
-      [session.id]: { session_id: session.id, status: "pending" }
-    }))
+    setSessions(prev => prev.map(s => s.id === session.id ? { ...s, expires_at: expiresAt } : s))
+    setAttempts(prev => ({ ...prev, [session.id]: { session_id: session.id, status: "pending" } }))
     setActiveUpload(session.id)
   }
 
@@ -164,28 +127,22 @@ export default function Sessions() {
     try {
       const ext = file.name.split(".").pop()
       const fileName = `${user}-${sessionId}-${Date.now()}.${ext}`
-
       const { error: uploadError } = await supabase.storage
         .from("proof").upload(fileName, file, { upsert: true })
       if (uploadError) { alert(`Upload error: ${uploadError.message}`); setUploading(false); return }
-
       const { data: urlData } = supabase.storage.from("proof").getPublicUrl(fileName)
       const proofUrl = urlData.publicUrl
 
       if (shareType === "hub") {
         const session = sessions.find(s => s.id === sessionId)
-
         await supabase.from("session_attempts")
           .update({ proof_url: proofUrl, status: "accepted" })
           .eq("user_name", user).eq("session_id", sessionId)
-
         const { data: lb } = await supabase.from("leaderboard")
           .select("id, points").eq("user_name", user).maybeSingle()
         if (lb && session) {
-          await supabase.from("leaderboard")
-            .update({ points: lb.points + session.points }).eq("id", lb.id)
+          await supabase.from("leaderboard").update({ points: lb.points + session.points }).eq("id", lb.id)
         }
-
         const isVideo = file.type.startsWith("video")
         await supabase.from("hub_posts").insert({
           user_name: user, school,
@@ -197,16 +154,12 @@ export default function Sessions() {
           media_type: isVideo ? "video" : "image",
           tried_count: 0
         })
-
         await supabase.from("notifications").insert({
-          user_name: user,
-          title: "LP Awarded! ⚡",
+          user_name: user, title: "LP Awarded! ⚡",
           message: `You shared to the Hub and earned ${session?.points} LP instantly!`,
           type: "proof_accepted", read: false
         })
-
         setAttempts(prev => ({ ...prev, [sessionId]: { ...prev[sessionId], status: "accepted" } }))
-        // Refresh ticker with new data
         loadTicker()
         alert(`🔥 Posted to Hub! +${session?.points} LP awarded!`)
       } else {
@@ -216,7 +169,6 @@ export default function Sessions() {
         setAttempts(prev => ({ ...prev, [sessionId]: { ...prev[sessionId], status: "submitted" } }))
         alert("Proof submitted! Your institution will review it.")
       }
-
       setActiveUpload(null)
       setShareChoice(prev => ({ ...prev, [sessionId]: null }))
     } catch (e: any) {
@@ -234,25 +186,24 @@ export default function Sessions() {
   return (
     <div className="flex flex-col h-full bg-black text-white">
 
-      {/* HEADER — outside scroll */}
+      {/* HEADER */}
       <div className="flex-shrink-0 p-4 pb-2 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-cyan-400">Sessions</h1>
         <NotificationBell />
       </div>
 
-      {/* TABS — outside scroll */}
+      {/* TABS */}
       <div className="flex-shrink-0 flex text-sm border-b border-zinc-800">
         <button className="flex-1 py-2.5 text-white font-semibold bg-zinc-800">Sessions</button>
         <button onClick={() => router.push("/groups")} className="flex-1 py-2.5 text-zinc-400">Groups</button>
         <button onClick={() => router.push("/leaderboard")} className="flex-1 py-2.5 text-zinc-400">Leaderboard</button>
       </div>
 
-      {/* TICKER — outside scroll, always visible */}
+      {/* TICKER */}
       <div className="flex-shrink-0" style={{
         background: "rgba(24,24,27,0.9)",
         borderBottom: "1px solid rgba(255,255,255,0.06)",
-        padding: "8px 0",
-        overflow: "hidden",
+        padding: "8px 0", overflow: "hidden",
       }}>
         <style>{`
           @keyframes tickerScroll {
@@ -275,7 +226,7 @@ export default function Sessions() {
         </div>
       </div>
 
-      {/* SESSIONS — only this part scrolls */}
+      {/* SESSIONS SCROLL */}
       <main className="flex-1 overflow-y-auto" style={{ paddingBottom: 20 }}>
         <div className="p-4 space-y-5">
           {sessions.length === 0 && (
@@ -304,13 +255,12 @@ export default function Sessions() {
                 className="rounded-2xl overflow-hidden"
                 style={{
                   background: isHighlighted ? "rgba(0,212,255,0.05)" : "#18181b",
-                  border: isHighlighted
-                    ? "1.5px solid rgba(0,212,255,0.5)"
-                    : "1px solid rgba(255,255,255,0.07)",
+                  border: isHighlighted ? "1.5px solid rgba(0,212,255,0.5)" : "1px solid rgba(255,255,255,0.07)",
                   boxShadow: isHighlighted ? "0 0 30px rgba(0,212,255,0.1)" : "none",
                   transition: "all 0.3s"
                 }}
               >
+                {/* IMAGE */}
                 <div className="relative">
                   {session.image ? (
                     <img src={session.image} className="w-full h-36 object-cover"
@@ -328,9 +278,7 @@ export default function Sessions() {
                   </div>
                   {isHighlighted && (
                     <div className="absolute bottom-2 left-2">
-                      <span className="bg-cyan-400 text-black text-[10px] font-black px-3 py-1 rounded-full">
-                        ← From Hub
-                      </span>
+                      <span className="bg-cyan-400 text-black text-[10px] font-black px-3 py-1 rounded-full">← From Hub</span>
                     </div>
                   )}
                 </div>
@@ -341,6 +289,7 @@ export default function Sessions() {
                     by {session.creator || "Admin"} · {session.category || "General"}
                   </p>
 
+                  {/* TIMER */}
                   {timeLeft && timeLeft !== "Expired" && hasAttempt && !isAccepted && (
                     <div className="mb-3">
                       <div className="flex items-center justify-between mb-1.5">
@@ -348,8 +297,7 @@ export default function Sessions() {
                         <span className="text-cyan-400 text-xs font-bold">⏱ {timeLeft}</span>
                       </div>
                       <div className="w-full bg-zinc-800 rounded-full h-1.5">
-                        <div
-                          className="bg-gradient-to-r from-cyan-400 to-purple-500 h-1.5 rounded-full"
+                        <div className="bg-gradient-to-r from-cyan-400 to-purple-500 h-1.5 rounded-full"
                           style={{
                             width: `${Math.max(0, Math.min(100,
                               (1 - (new Date(session.expires_at).getTime() - Date.now()) / (24 * 60 * 60 * 1000)) * 100
@@ -377,6 +325,7 @@ export default function Sessions() {
                     </div>
                   )}
 
+                  {/* UPLOAD PANEL */}
                   {showUpload && !isSubmitted && !isAccepted && (
                     <div className="bg-zinc-800 rounded-xl p-3 mb-3 border border-zinc-700 space-y-3">
                       <p className="text-sm text-white font-semibold">📎 Upload your proof</p>
@@ -460,5 +409,17 @@ export default function Sessions() {
 
       <BottomNav />
     </div>
+  )
+}
+
+export default function Sessions() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col h-full bg-black text-white items-center justify-center">
+        <p className="text-zinc-500 text-sm">Loading...</p>
+      </div>
+    }>
+      <SessionsContent />
+    </Suspense>
   )
 }
