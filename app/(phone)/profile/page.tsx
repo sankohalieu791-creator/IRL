@@ -111,12 +111,6 @@ export default function Profile() {
     if (posts) setTriedPosts(posts)
   }
 
-  async function deleteHubPost(postId: string) {
-    if (!confirm("Delete this post?")) return
-    await supabase.from("hub_posts").delete().eq("id", postId).eq("user_name", USER)
-    setHubPosts(prev => prev.filter(p => p.id !== postId))
-  }
-
   async function saveBio() {
     await supabase.from("users").update({ bio: bioInput }).eq("user_name", USER)
     setBio(bioInput)
@@ -345,36 +339,35 @@ export default function Profile() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                 {hubPosts.map(post => (
                   <div key={post.id}
+                    onClick={() => { setSelectedPost(post); setSelectedIsOwn(true) }}
                     style={{
                       aspectRatio: "9/16", position: "relative",
                       background: "#111", cursor: "pointer", overflow: "hidden"
                     }}
                   >
-                    {/* tap to view */}
-                    <div onClick={() => { setSelectedPost(post); setSelectedIsOwn(true) }} style={{ position: "absolute", inset: 0, zIndex: 1 }}>
-                      {post.media_type === "video" ? (
-                        <video src={post.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
-                      ) : (
-                        <img src={post.media_url} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      )}
-                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(135deg, ${getTypeColor(post.session_type)}, #B400FF)` }} />
-                      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 60%)" }} />
-                      <div style={{ position: "absolute", bottom: 6, left: 6, right: 6 }}>
-                        <p style={{ color: "white", fontSize: 10, fontWeight: 700, lineHeight: 1.3 }}>{post.session_title}</p>
-                        <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, marginTop: 2 }}>👥 {post.tried_count}</p>
-                      </div>
+                    {post.media_type === "video" ? (
+                      <video src={post.media_url}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
+                    ) : (
+                      <img src={post.media_url}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    )}
+                    <div style={{
+                      position: "absolute", top: 0, left: 0, right: 0, height: 3,
+                      background: `linear-gradient(135deg, ${getTypeColor(post.session_type)}, #B400FF)`
+                    }} />
+                    <div style={{
+                      position: "absolute", inset: 0,
+                      background: "linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 60%)"
+                    }} />
+                    <div style={{ position: "absolute", bottom: 6, left: 6, right: 6 }}>
+                      <p style={{ color: "white", fontSize: 10, fontWeight: 700, lineHeight: 1.3 }}>
+                        {post.session_title}
+                      </p>
+                      <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, marginTop: 2 }}>
+                        👥 {post.tried_count}
+                      </p>
                     </div>
-                    {/* delete button */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); deleteHubPost(post.id) }}
-                      style={{
-                        position: "absolute", top: 6, right: 6, zIndex: 2,
-                        background: "rgba(255,0,0,0.7)", border: "none",
-                        borderRadius: "50%", width: 24, height: 24,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        cursor: "pointer", fontSize: 11, color: "white", fontWeight: 700
-                      }}
-                    >✕</button>
                   </div>
                 ))}
               </div>
