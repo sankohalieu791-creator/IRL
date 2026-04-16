@@ -188,6 +188,16 @@ export default function Groups() {
     if (data) setMessages(data)
   }
 
+  async function deleteMessage(msgId: string) {
+    if (!confirm("Delete this message?")) return
+
+    await supabase.from("group_messages")
+      .delete()
+      .eq("id", msgId)
+
+    setMessages(prev => prev.filter(m => m.id !== msgId))
+  }
+
   function timeAgo(dateStr: string) {
     const diff = Date.now() - new Date(dateStr).getTime()
     const m = Math.floor(diff / 60000)
@@ -291,12 +301,25 @@ export default function Groups() {
 
                   {/* Message bubble */}
                   <div style={{
+                    position: "relative",
                     background: "rgba(255,255,255,0.06)",
                     border: "1px solid rgba(255,255,255,0.08)",
                     borderRadius: "4px 16px 16px 16px",
                     padding: msg.media_url ? 0 : "10px 14px",
                     overflow: "hidden"
                   }}>
+                    {isAdmin && (
+                      <button
+                        onClick={() => deleteMessage(msg.id)}
+                        style={{
+                          position: "absolute", top: 8, right: 8,
+                          background: "rgba(255,0,0,0.2)", border: "none",
+                          borderRadius: "50%", width: 22, height: 22,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          cursor: "pointer", fontSize: 10, color: "#f87171"
+                        }}
+                      >✕</button>
+                    )}
                     {msg.media_type === "video" && msg.media_url && (
                       <video src={msg.media_url}
                         style={{ width: "100%", maxHeight: 240, objectFit: "cover", display: "block" }}
