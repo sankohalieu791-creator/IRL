@@ -12,6 +12,7 @@ export default function AdminDashboard() {
   const router = useRouter()
   const [ADMIN, setADMIN] = useState("Admin")
   const [SCHOOL, setSCHOOL] = useState("IRL")
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [tab, setTab] = useState<Tab>("proofs")
   const [sessions, setSessions] = useState<any[]>([])
   const [newSession, setNewSession] = useState({
@@ -51,6 +52,8 @@ export default function AdminDashboard() {
     if (!user) { router.replace("/login"); return }
     setADMIN(user)
     if (school) setSCHOOL(school)
+    // Only you are super admin — change "Alieu" to your actual username
+    if (user === "Alieu") setIsSuperAdmin(true)
   }, [])
 
   useEffect(() => {
@@ -66,7 +69,11 @@ export default function AdminDashboard() {
   }, [tab])
 
   async function loadSessions() {
-    const { data } = await supabase.from("sessions").select("*").order("created_at", { ascending: false })
+    const { data } = await supabase
+      .from("sessions")
+      .select("*")
+      .eq("institution", SCHOOL)
+      .order("created_at", { ascending: false })
     if (data) setSessions(data)
   }
 
@@ -76,10 +83,24 @@ export default function AdminDashboard() {
   }
 
   async function loadProofs() {
+    // Get all students in this school first
+    const { data: schoolStudents } = await supabase
+      .from("users")
+      .select("user_name")
+      .eq("school", SCHOOL)
+      .eq("role", "student")
+
+    if (!schoolStudents || schoolStudents.length === 0) { setProofs([]); return }
+
+    const usernames = schoolStudents.map(s => s.user_name)
+
     const { data } = await supabase
-      .from("session_attempts").select("*")
+      .from("session_attempts")
+      .select("*")
+      .in("user_name", usernames)
       .not("proof_url", "is", null)
       .order("created_at", { ascending: false })
+
     if (!data) return
     const withTitles = await Promise.all(
       data.map(async (p) => {
@@ -335,10 +356,12 @@ export default function AdminDashboard() {
     { key: "proofs", label: "Proofs", icon: "📎" },
     { key: "sessions", label: "Sessions", icon: "⚡" },
     { key: "students", label: "Students", icon: "👥" },
-    { key: "codes", label: "Codes", icon: "🔑" },
     { key: "groups", label: "Groups", icon: "🏘" },
     { key: "rewards", label: "Rewards", icon: "🎁" },
-    { key: "institutions", label: "Institutions", icon: "🏫" },
+    ...(isSuperAdmin ? [
+      { key: "codes" as Tab, label: "Codes", icon: "🔑" },
+      { key: "institutions" as Tab, label: "Institutions", icon: "🏫" },
+    ] : []),
   ]
 
   // GROUP CHAT VIEW
