@@ -49,28 +49,24 @@ export default function Groups() {
   useEffect(() => {
     const u = getUser() || ""
     const s = getSchool() || ""
-    const r = typeof window !== "undefined" ? localStorage.getItem("irl_role") || "" : ""
     setUser(u)
     setSchool(s)
-    setRole(r)
   }, [])
 
   useEffect(() => {
     if (user) {
       loadGroups()
       loadMyMemberships()
+      checkIfAdmin()
     }
   }, [user])
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Realtime messages
   useEffect(() => {
     if (!activeGroup) return
-
     const channel = supabase
       .channel(`group-messages-${activeGroup.id}`)
       .on("postgres_changes", {
@@ -82,18 +78,24 @@ export default function Groups() {
         setMessages(prev => [...prev, payload.new as Message])
       })
       .subscribe()
-
     return () => { supabase.removeChannel(channel) }
   }, [activeGroup])
+
+  async function checkIfAdmin() {
+    const { data } = await supabase
+      .from("users")
+      .select("role")
+      .eq("user_name", user)
+      .maybeSingle()
+    if (data?.role === "admin") setRole("admin")
+  }
 
   async function loadGroups() {
     const { data } = await supabase
       .from("groups")
       .select("*")
       .order("total_lp", { ascending: false })
-
     if (!data) return
-
     const groupsWithCounts = await Promise.all(
       data.map(async (g) => {
         const { count } = await supabase
@@ -112,7 +114,6 @@ export default function Groups() {
       .from("group_members")
       .select("group_id, status")
       .eq("user_name", user)
-
     if (!data) return
     const map: Record<string, string> = {}
     data.forEach(m => { map[m.group_id] = m.status })
@@ -124,7 +125,6 @@ export default function Groups() {
     const { error } = await supabase
       .from("group_members")
       .insert({ group_id: groupId, user_name: user, status: "pending" })
-
     if (error) {
       alert(`Error: ${error.message}`)
     } else {
@@ -157,25 +157,17 @@ export default function Groups() {
       .select("user_name")
       .eq("group_id", groupId)
       .eq("status", "accepted")
-
     if (!memberData) return
     const usernames = memberData.map(m => m.user_name)
-
     const { data: pointsData } = await supabase
       .from("leaderboard")
       .select("user_name, points, school")
       .in("user_name", usernames)
       .order("points", { ascending: false })
-
     if (pointsData) {
       setGroupLeaderboard(pointsData)
-
-      // Update group total LP
       const totalLP = pointsData.reduce((sum, u) => sum + u.points, 0)
-      await supabase
-        .from("groups")
-        .update({ total_lp: totalLP })
-        .eq("id", groupId)
+      await supabase.from("groups").update({ total_lp: totalLP }).eq("id", groupId)
     }
   }
 
@@ -189,12 +181,7 @@ export default function Groups() {
   }
 
   async function deleteMessage(msgId: string) {
-    if (!confirm("Delete this message?")) return
-
-    await supabase.from("group_messages")
-      .delete()
-      .eq("id", msgId)
-
+    await supabase.from("group_messages").delete().eq("id", msgId)
     setMessages(prev => prev.filter(m => m.id !== msgId))
   }
 
@@ -212,14 +199,12 @@ export default function Groups() {
   const medals = ["🥇", "🥈", "🥉"]
   const isAdmin = role === "admin"
 
-  // ── GROUP DETAIL VIEW ────────────────────────────────────────────────────
   if (activeGroup) {
     const totalLP = groupLeaderboard.reduce((sum, u) => sum + u.points, 0)
 
     return (
       <div className="flex flex-col h-full bg-black text-white overflow-hidden">
 
-        {/* HEADER */}
         <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-zinc-800">
           <button
             onClick={() => setActiveGroup(null)}
@@ -243,7 +228,6 @@ export default function Groups() {
           </div>
         </div>
 
-        {/* TABS */}
         <div className="flex-shrink-0 flex border-b border-zinc-800">
           {(["chat", "leaderboard", "members"] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
@@ -255,18 +239,13 @@ export default function Groups() {
           ))}
         </div>
 
-        {/* CHAT TAB */}
         {activeTab === "chat" && (
           <div className="flex flex-col flex-1 min-h-0">
-
-            {/* MESSAGES */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
               {messages.length === 0 && (
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
                   <p style={{ fontSize: 32, marginBottom: 8 }}>💬</p>
-                  <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>
-                    No messages yet
-                  </p>
+                  <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>No messages yet</p>
                   <p style={{ color: "rgba(255,255,255,0.2)", fontSize: 11, marginTop: 4 }}>
                     Your admin will post updates here
                   </p>
@@ -275,7 +254,6 @@ export default function Groups() {
 
               {messages.map(msg => (
                 <div key={msg.id} style={{ maxWidth: "85%" }}>
-                  {/* Admin label */}
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                     <div style={{
                       width: 24, height: 24, borderRadius: "50%",
@@ -297,29 +275,27 @@ export default function Groups() {
                     <span style={{ color: "rgba(255,255,255,0.2)", fontSize: 10 }}>
                       {timeAgo(msg.created_at)}
                     </span>
+                    {isAdmin && (
+                      <button
+                        onClick={() => deleteMessage(msg.id)}
+                        style={{
+                          marginLeft: "auto", background: "rgba(255,0,0,0.15)",
+                          border: "1px solid rgba(255,0,0,0.3)", borderRadius: "50%",
+                          width: 20, height: 20, display: "flex", alignItems: "center",
+                          justifyContent: "center", cursor: "pointer",
+                          fontSize: 9, color: "#f87171", flexShrink: 0
+                        }}
+                      >✕</button>
+                    )}
                   </div>
 
-                  {/* Message bubble */}
                   <div style={{
-                    position: "relative",
                     background: "rgba(255,255,255,0.06)",
                     border: "1px solid rgba(255,255,255,0.08)",
                     borderRadius: "4px 16px 16px 16px",
                     padding: msg.media_url ? 0 : "10px 14px",
                     overflow: "hidden"
                   }}>
-                    {isAdmin && (
-                      <button
-                        onClick={() => deleteMessage(msg.id)}
-                        style={{
-                          position: "absolute", top: 8, right: 8,
-                          background: "rgba(255,0,0,0.2)", border: "none",
-                          borderRadius: "50%", width: 22, height: 22,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          cursor: "pointer", fontSize: 10, color: "#f87171"
-                        }}
-                      >✕</button>
-                    )}
                     {msg.media_type === "video" && msg.media_url && (
                       <video src={msg.media_url}
                         style={{ width: "100%", maxHeight: 240, objectFit: "cover", display: "block" }}
@@ -343,14 +319,12 @@ export default function Groups() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* VIEW ONLY BAR for students */}
             {!isAdmin && (
               <div className="flex-shrink-0 px-4 py-3 border-t border-zinc-800">
                 <div style={{
                   background: "rgba(255,255,255,0.04)",
                   border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: 12, padding: "12px 16px",
-                  textAlign: "center"
+                  borderRadius: 12, padding: "12px 16px", textAlign: "center"
                 }}>
                   <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 12 }}>
                     👀 View only — only admins can send messages
@@ -359,7 +333,6 @@ export default function Groups() {
               </div>
             )}
 
-            {/* ADMIN MESSAGE INPUT */}
             {isAdmin && (
               <AdminMessageInput
                 groupId={activeGroup.id}
@@ -370,7 +343,6 @@ export default function Groups() {
           </div>
         )}
 
-        {/* LEADERBOARD TAB */}
         {activeTab === "leaderboard" && (
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
             {groupLeaderboard.map((u, i) => (
@@ -383,9 +355,7 @@ export default function Groups() {
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-base w-6">
-                    {i < 3 ? medals[i] : `${i + 1}.`}
-                  </span>
+                  <span className="text-base w-6">{i < 3 ? medals[i] : `${i + 1}.`}</span>
                   <div style={{
                     width: 32, height: 32, borderRadius: "50%",
                     background: "linear-gradient(135deg, #B400FF, #00D4FF)",
@@ -408,7 +378,6 @@ export default function Groups() {
           </div>
         )}
 
-        {/* MEMBERS TAB */}
         {activeTab === "members" && (
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
             {members.map((m, i) => (
@@ -440,11 +409,9 @@ export default function Groups() {
     )
   }
 
-  // ── GROUPS LIST ──────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full bg-black text-white overflow-hidden">
       <main className="flex flex-col flex-1 overflow-y-auto pb-4">
-
         <div className="p-4 pb-2">
           <button onClick={() => router.push("/sessions")}
             className="text-zinc-500 text-sm mb-3 flex items-center gap-1">
@@ -528,7 +495,6 @@ export default function Groups() {
   )
 }
 
-// ── ADMIN MESSAGE INPUT COMPONENT ────────────────────────────────────────────
 function AdminMessageInput({
   groupId, sender, onSent
 }: {
@@ -544,10 +510,8 @@ function AdminMessageInput({
     if (!text.trim()) return
     setSending(true)
     await supabase.from("group_messages").insert({
-      group_id: groupId,
-      sender,
-      message: text.trim(),
-      media_type: "text"
+      group_id: groupId, sender,
+      message: text.trim(), media_type: "text"
     })
     setText("")
     onSent()
@@ -558,23 +522,16 @@ function AdminMessageInput({
     setUploading(true)
     const ext = file.name.split(".").pop()
     const fileName = `group-${groupId}-${Date.now()}.${ext}`
-
-    const { error } = await supabase.storage
-      .from("proof").upload(fileName, file, { upsert: true })
-
+    const { error } = await supabase.storage.from("proof").upload(fileName, file, { upsert: true })
     if (error) { alert(`Upload error: ${error.message}`); setUploading(false); return }
-
     const { data: urlData } = supabase.storage.from("proof").getPublicUrl(fileName)
     const isVideo = file.type.startsWith("video")
-
     await supabase.from("group_messages").insert({
-      group_id: groupId,
-      sender,
+      group_id: groupId, sender,
       message: text.trim() || "",
       media_url: urlData.publicUrl,
       media_type: isVideo ? "video" : "image"
     })
-
     setText("")
     onSent()
     setUploading(false)
@@ -588,7 +545,6 @@ function AdminMessageInput({
         borderRadius: 16, padding: "8px 12px",
         display: "flex", alignItems: "center", gap: 8
       }}>
-        {/* Media upload */}
         <label style={{ flexShrink: 0, cursor: "pointer" }}>
           <span style={{ fontSize: 20 }}>{uploading ? "⏳" : "📎"}</span>
           <input type="file" accept="image/*,video/*"
@@ -598,8 +554,6 @@ function AdminMessageInput({
               if (file) sendMedia(file)
             }} />
         </label>
-
-        {/* Text input */}
         <input
           value={text}
           onChange={e => setText(e.target.value)}
@@ -610,8 +564,6 @@ function AdminMessageInput({
             color: "white", fontSize: 13, outline: "none"
           }}
         />
-
-        {/* Send button */}
         <button onClick={sendMessage} disabled={sending || !text.trim()}
           style={{
             flexShrink: 0, padding: "6px 14px",
