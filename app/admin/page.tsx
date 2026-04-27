@@ -81,7 +81,6 @@ export default function AdminDashboard() {
   }
 
   async function loadProofs() {
-    // CHANGE 1: Only show proofs from THIS admin's institution
     const { data: schoolStudents } = await supabase
       .from("users")
       .select("user_name")
@@ -106,7 +105,6 @@ export default function AdminDashboard() {
         return { ...p, session_title: session?.title || "Unknown", institution: session?.institution }
       })
     )
-    // Filter to ONLY show proofs from sessions created by THIS institution
     const filtered = withTitles.filter(p => p.institution === SCHOOL)
     setProofs(filtered)
   }
@@ -337,16 +335,41 @@ export default function AdminDashboard() {
     loadPendingMembers()
   }
 
-  // CHANGE 2: Fixed delete group function
+  // Delete group function - handles cascade
   async function deleteGroup(id: string) {
-    if (!confirm("Delete this group?")) return
-    const { error } = await supabase.from("groups").delete().eq("id", id)
-    if (error) {
-      alert(`Error deleting group: ${error.message}`)
-      return
+    if (!confirm("Delete this group? This cannot be undone.")) return
+    
+    try {
+      // Delete all group members first
+      const { error: membersError } = await supabase
+        .from("group_members")
+        .delete()
+        .eq("group_id", id)
+      
+      if (membersError) throw membersError
+      
+      // Delete all group messages
+      const { error: messagesError } = await supabase
+        .from("group_messages")
+        .delete()
+        .eq("group_id", id)
+      
+      if (messagesError) throw messagesError
+      
+      // Finally delete the group
+      const { error: groupError } = await supabase
+        .from("groups")
+        .delete()
+        .eq("id", id)
+      
+      if (groupError) throw groupError
+      
+      await loadGroups()
+      alert("Group deleted successfully!")
+    } catch (error) {
+      console.error("Error deleting group:", error)
+      alert("Failed to delete group")
     }
-    await loadGroups()
-    alert("Group deleted!")
   }
 
   function timeAgo(dateStr: string) {

@@ -46,13 +46,10 @@ export default function Groups() {
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
-  // State for user messages (non-admin)
+  // CHANGE 3: State for user messages (non-admin)
   const [userMessageText, setUserMessageText] = useState("")
   const [userSendingMessage, setUserSendingMessage] = useState(false)
   const [userUploadingMedia, setUserUploadingMedia] = useState(false)
-
-  // State for deleting groups
-  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null)
 
   useEffect(() => {
     const u = getUser() || ""
@@ -193,7 +190,7 @@ export default function Groups() {
     setMessages(prev => prev.filter(m => m.id !== msgId))
   }
 
-  // Function for users to send messages
+  // CHANGE 3: Function for users to send messages
   async function sendUserMessage(groupId: string) {
     if (!userMessageText.trim()) return
     setUserSendingMessage(true)
@@ -206,7 +203,7 @@ export default function Groups() {
     setUserSendingMessage(false)
   }
 
-  // Function for users to send media
+  // CHANGE 3: Function for users to send media
   async function sendUserMedia(groupId: string, file: File) {
     setUserUploadingMedia(true)
     const ext = file.name.split(".").pop()
@@ -224,48 +221,6 @@ export default function Groups() {
     setUserMessageText("")
     await loadMessages(groupId)
     setUserUploadingMedia(false)
-  }
-
-  // Function to delete a group (admin only)
-  async function deleteGroup(groupId: string) {
-    if (!confirm("Are you sure you want to delete this group? This cannot be undone.")) return
-    
-    try {
-      setDeletingGroupId(groupId)
-      
-      // Delete all group members first
-      const { error: membersError } = await supabase
-        .from("group_members")
-        .delete()
-        .eq("group_id", groupId)
-      
-      if (membersError) throw membersError
-      
-      // Delete all group messages
-      const { error: messagesError } = await supabase
-        .from("group_messages")
-        .delete()
-        .eq("group_id", groupId)
-      
-      if (messagesError) throw messagesError
-      
-      // Finally delete the group
-      const { error: groupError } = await supabase
-        .from("groups")
-        .delete()
-        .eq("id", groupId)
-      
-      if (groupError) throw groupError
-      
-      // Remove from state
-      setGroups(prev => prev.filter(g => g.id !== groupId))
-      alert("Group deleted successfully")
-    } catch (error) {
-      console.error("Error deleting group:", error)
-      alert("Failed to delete group")
-    } finally {
-      setDeletingGroupId(null)
-    }
   }
 
   function timeAgo(dateStr: string) {
@@ -404,7 +359,7 @@ export default function Groups() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Non-admins can send messages */}
+            {/* CHANGE 3: Non-admins can now send messages */}
             <div className="flex-shrink-0 px-4 py-3 border-t border-zinc-800">
               <div style={{
                 background: "rgba(255,255,255,0.04)",
@@ -586,26 +541,6 @@ export default function Groups() {
                     <button onClick={() => requestJoin(group.id)} disabled={loading}
                       className="flex-1 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm font-semibold text-zinc-300">
                       Request to Join
-                    </button>
-                  )}
-                  
-                  {isAdmin && (
-                    <button 
-                      onClick={() => deleteGroup(group.id)}
-                      disabled={deletingGroupId === group.id}
-                      style={{
-                        padding: "10px 14px",
-                        background: "rgba(255,0,0,0.15)",
-                        border: "1px solid rgba(255,0,0,0.3)",
-                        borderRadius: 10,
-                        color: "#f87171",
-                        fontWeight: 700,
-                        fontSize: 12,
-                        cursor: deletingGroupId === group.id ? "not-allowed" : "pointer",
-                        opacity: deletingGroupId === group.id ? 0.6 : 1
-                      }}
-                    >
-                      {deletingGroupId === group.id ? "🗑️ Deleting..." : "🗑️ Delete"}
                     </button>
                   )}
                 </div>
