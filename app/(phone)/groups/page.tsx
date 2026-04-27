@@ -46,6 +46,11 @@ export default function Groups() {
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
+  // CHANGE 3: State for user messages (non-admin)
+  const [userMessageText, setUserMessageText] = useState("")
+  const [userSendingMessage, setUserSendingMessage] = useState(false)
+  const [userUploadingMedia, setUserUploadingMedia] = useState(false)
+
   useEffect(() => {
     const u = getUser() || ""
     const s = getSchool() || ""
@@ -185,6 +190,39 @@ export default function Groups() {
     setMessages(prev => prev.filter(m => m.id !== msgId))
   }
 
+  // CHANGE 3: Function for users to send messages
+  async function sendUserMessage(groupId: string) {
+    if (!userMessageText.trim()) return
+    setUserSendingMessage(true)
+    await supabase.from("group_messages").insert({
+      group_id: groupId, sender: user,
+      message: userMessageText.trim(), media_type: "text"
+    })
+    setUserMessageText("")
+    await loadMessages(groupId)
+    setUserSendingMessage(false)
+  }
+
+  // CHANGE 3: Function for users to send media
+  async function sendUserMedia(groupId: string, file: File) {
+    setUserUploadingMedia(true)
+    const ext = file.name.split(".").pop()
+    const fileName = `group-${groupId}-${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from("proof").upload(fileName, file, { upsert: true })
+    if (error) { alert(`Upload error: ${error.message}`); setUserUploadingMedia(false); return }
+    const { data: urlData } = supabase.storage.from("proof").getPublicUrl(fileName)
+    const isVideo = file.type.startsWith("video")
+    await supabase.from("group_messages").insert({
+      group_id: groupId, sender: user,
+      message: userMessageText.trim() || "",
+      media_url: urlData.publicUrl,
+      media_type: isVideo ? "video" : "image"
+    })
+    setUserMessageText("")
+    await loadMessages(groupId)
+    setUserUploadingMedia(false)
+  }
+
   function timeAgo(dateStr: string) {
     const diff = Date.now() - new Date(dateStr).getTime()
     const m = Math.floor(diff / 60000)
@@ -266,12 +304,14 @@ export default function Groups() {
                     <span style={{ color: "#00D4FF", fontSize: 11, fontWeight: 700 }}>
                       {msg.sender}
                     </span>
-                    <span style={{
-                      background: "rgba(180,0,255,0.2)",
-                      border: "1px solid rgba(180,0,255,0.4)",
-                      color: "#B400FF", fontSize: 8, fontWeight: 800,
-                      padding: "1px 6px", borderRadius: 100, letterSpacing: 1
-                    }}>ADMIN</span>
+                    {isAdmin && (
+                      <span style={{
+                        background: "rgba(180,0,255,0.2)",
+                        border: "1px solid rgba(180,0,255,0.4)",
+                        color: "#B400FF", fontSize: 8, fontWeight: 800,
+                        padding: "1px 6px", borderRadius: 100, letterSpacing: 1
+                      }}>ADMIN</span>
+                    )}
                     <span style={{ color: "rgba(255,255,255,0.2)", fontSize: 10 }}>
                       {timeAgo(msg.created_at)}
                     </span>
@@ -319,27 +359,46 @@ export default function Groups() {
               <div ref={messagesEndRef} />
             </div>
 
-            {!isAdmin && (
-              <div className="flex-shrink-0 px-4 py-3 border-t border-zinc-800">
-                <div style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: 12, padding: "12px 16px", textAlign: "center"
-                }}>
-                  <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 12 }}>
-                    👀 View only — only admins can send messages
-                  </p>
-                </div>
+            {/* CHANGE 3: Non-admins can now send messages */}
+            <div className="flex-shrink-0 px-4 py-3 border-t border-zinc-800">
+              <div style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 16, padding: "8px 12px",
+                display: "flex", alignItems: "center", gap: 8
+              }}>
+                <label style={{ flexShrink: 0, cursor: "pointer" }}>
+                  <span style={{ fontSize: 20 }}>{userUploadingMedia ? "⏳" : "📎"}</span>
+                  <input type="file" accept="image/*,video/*"
+                    className="hidden" disabled={userUploadingMedia}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file && activeGroup) sendUserMedia(activeGroup.id, file)
+                    }} />
+                </label>
+                <input
+                  value={userMessageText}
+                  onChange={e => setUserMessageText(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && activeGroup) sendUserMessage(activeGroup.id) }}
+                  placeholder="Send a message..."
+                  style={{
+                    flex: 1, background: "transparent", border: "none",
+                    color: "white", fontSize: 13, outline: "none"
+                  }}
+                />
+                <button onClick={() => activeGroup && sendUserMessage(activeGroup.id)} 
+                  disabled={userSendingMessage || !userMessageText.trim()}
+                  style={{
+                    flexShrink: 0, padding: "6px 14px",
+                    background: userMessageText.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "rgba(255,255,255,0.08)",
+                    border: "none", borderRadius: 10,
+                    color: userMessageText.trim() ? "white" : "rgba(255,255,255,0.3)",
+                    fontWeight: 700, fontSize: 12, cursor: userMessageText.trim() ? "pointer" : "default"
+                  }}>
+                  {userSendingMessage ? "..." : "Send"}
+                </button>
               </div>
-            )}
-
-            {isAdmin && (
-              <AdminMessageInput
-                groupId={activeGroup.id}
-                sender={user}
-                onSent={() => loadMessages(activeGroup.id)}
-              />
-            )}
+            </div>
           </div>
         )}
 
@@ -491,90 +550,6 @@ export default function Groups() {
         </div>
       </main>
       <BottomNav />
-    </div>
-  )
-}
-
-function AdminMessageInput({
-  groupId, sender, onSent
-}: {
-  groupId: string
-  sender: string
-  onSent: () => void
-}) {
-  const [text, setText] = useState("")
-  const [sending, setSending] = useState(false)
-  const [uploading, setUploading] = useState(false)
-
-  async function sendMessage() {
-    if (!text.trim()) return
-    setSending(true)
-    await supabase.from("group_messages").insert({
-      group_id: groupId, sender,
-      message: text.trim(), media_type: "text"
-    })
-    setText("")
-    onSent()
-    setSending(false)
-  }
-
-  async function sendMedia(file: File) {
-    setUploading(true)
-    const ext = file.name.split(".").pop()
-    const fileName = `group-${groupId}-${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from("proof").upload(fileName, file, { upsert: true })
-    if (error) { alert(`Upload error: ${error.message}`); setUploading(false); return }
-    const { data: urlData } = supabase.storage.from("proof").getPublicUrl(fileName)
-    const isVideo = file.type.startsWith("video")
-    await supabase.from("group_messages").insert({
-      group_id: groupId, sender,
-      message: text.trim() || "",
-      media_url: urlData.publicUrl,
-      media_type: isVideo ? "video" : "image"
-    })
-    setText("")
-    onSent()
-    setUploading(false)
-  }
-
-  return (
-    <div className="flex-shrink-0 border-t border-zinc-800 p-3">
-      <div style={{
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: 16, padding: "8px 12px",
-        display: "flex", alignItems: "center", gap: 8
-      }}>
-        <label style={{ flexShrink: 0, cursor: "pointer" }}>
-          <span style={{ fontSize: 20 }}>{uploading ? "⏳" : "📎"}</span>
-          <input type="file" accept="image/*,video/*"
-            className="hidden" disabled={uploading}
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) sendMedia(file)
-            }} />
-        </label>
-        <input
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") sendMessage() }}
-          placeholder="Send a message to the group..."
-          style={{
-            flex: 1, background: "transparent", border: "none",
-            color: "white", fontSize: 13, outline: "none"
-          }}
-        />
-        <button onClick={sendMessage} disabled={sending || !text.trim()}
-          style={{
-            flexShrink: 0, padding: "6px 14px",
-            background: text.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "rgba(255,255,255,0.08)",
-            border: "none", borderRadius: 10,
-            color: text.trim() ? "white" : "rgba(255,255,255,0.3)",
-            fontWeight: 700, fontSize: 12, cursor: text.trim() ? "pointer" : "default"
-          }}>
-          {sending ? "..." : "Send"}
-        </button>
-      </div>
     </div>
   )
 }

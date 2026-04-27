@@ -33,7 +33,6 @@ export default function AdminDashboard() {
   const [sendingMessage, setSendingMessage] = useState(false)
   const [uploadingMedia, setUploadingMedia] = useState(false)
 
-  // Rewards state
   const [rewards, setRewards] = useState<any[]>([])
   const [newReward, setNewReward] = useState({
     title: "",
@@ -52,7 +51,6 @@ export default function AdminDashboard() {
     if (!user) { router.replace("/login"); return }
     setADMIN(user)
     if (school) setSCHOOL(school)
-    // Only you are super admin — change "Alieu" to your actual username
     if (user === "Alieu") setIsSuperAdmin(true)
   }, [])
 
@@ -83,7 +81,7 @@ export default function AdminDashboard() {
   }
 
   async function loadProofs() {
-    // Get all students in this school first
+    // CHANGE 1: Only show proofs from THIS admin's institution
     const { data: schoolStudents } = await supabase
       .from("users")
       .select("user_name")
@@ -104,11 +102,13 @@ export default function AdminDashboard() {
     if (!data) return
     const withTitles = await Promise.all(
       data.map(async (p) => {
-        const { data: session } = await supabase.from("sessions").select("title").eq("id", p.session_id).maybeSingle()
-        return { ...p, session_title: session?.title || "Unknown" }
+        const { data: session } = await supabase.from("sessions").select("title, institution").eq("id", p.session_id).maybeSingle()
+        return { ...p, session_title: session?.title || "Unknown", institution: session?.institution }
       })
     )
-    setProofs(withTitles)
+    // Filter to ONLY show proofs from sessions created by THIS institution
+    const filtered = withTitles.filter(p => p.institution === SCHOOL)
+    setProofs(filtered)
   }
 
   async function loadStudents() {
@@ -129,7 +129,7 @@ export default function AdminDashboard() {
   }
 
   async function loadGroups() {
-    const { data } = await supabase.from("groups").select("*")
+    const { data } = await supabase.from("groups").select("*").eq("institution", SCHOOL)
     if (data) setGroups(data)
   }
 
@@ -337,10 +337,16 @@ export default function AdminDashboard() {
     loadPendingMembers()
   }
 
+  // CHANGE 2: Fixed delete group function
   async function deleteGroup(id: string) {
     if (!confirm("Delete this group?")) return
-    await supabase.from("groups").delete().eq("id", id)
-    loadGroups()
+    const { error } = await supabase.from("groups").delete().eq("id", id)
+    if (error) {
+      alert(`Error deleting group: ${error.message}`)
+      return
+    }
+    await loadGroups()
+    alert("Group deleted!")
   }
 
   function timeAgo(dateStr: string) {
@@ -364,7 +370,6 @@ export default function AdminDashboard() {
     ] : []),
   ]
 
-  // GROUP CHAT VIEW
   if (activeGroupChat) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
@@ -453,7 +458,6 @@ export default function AdminDashboard() {
 
       <div className="max-w-4xl mx-auto p-6 space-y-6">
 
-        {/* PROOFS */}
         {tab === "proofs" && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-white">Proof Submissions</h2>
@@ -499,7 +503,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* SESSIONS */}
         {tab === "sessions" && (
           <div className="space-y-4">
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
@@ -558,7 +561,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* STUDENTS */}
         {tab === "students" && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-white">All Students</h2>
@@ -582,7 +584,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* CODES */}
         {tab === "codes" && (
           <div className="space-y-4">
             {generatedCode && (
@@ -626,7 +627,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* GROUPS */}
         {tab === "groups" && (
           <div className="space-y-4">
             {pendingMembers.length > 0 && (
@@ -690,7 +690,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* REWARDS */}
         {tab === "rewards" && (
           <div className="space-y-4">
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
@@ -790,7 +789,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* INSTITUTIONS */}
         {tab === "institutions" && (
           <div className="space-y-4">
             <InstitutionsTab school={SCHOOL} />
