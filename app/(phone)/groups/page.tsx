@@ -326,6 +326,48 @@ export default function Groups() {
 
         {activeTab === "chat" && (
           <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            {/* Input at top */}
+            <div className="flex-shrink-0 px-4 py-3 border-b border-zinc-800">
+              <div style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 16, padding: "8px 12px",
+                display: "flex", alignItems: "center", gap: 8
+              }}>
+                <label style={{ flexShrink: 0, cursor: "pointer" }}>
+                  <span style={{ fontSize: 20 }}>{userUploadingMedia ? "⏳" : "📎"}</span>
+                  <input type="file" accept="image/*,video/*"
+                    className="hidden" disabled={userUploadingMedia}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file && activeGroup) sendUserMedia(activeGroup.id, file)
+                    }} />
+                </label>
+                <input
+                  value={userMessageText}
+                  onChange={e => setUserMessageText(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && activeGroup) sendUserMessage(activeGroup.id) }}
+                  placeholder="Send a message..."
+                  style={{
+                    flex: 1, background: "transparent", border: "none",
+                    color: "white", fontSize: 13, outline: "none"
+                  }}
+                />
+                <button onClick={() => activeGroup && sendUserMessage(activeGroup.id)} 
+                  disabled={userSendingMessage || !userMessageText.trim()}
+                  style={{
+                    flexShrink: 0, padding: "6px 14px",
+                    background: userMessageText.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "rgba(255,255,255,0.08)",
+                    border: "none", borderRadius: 10,
+                    color: userMessageText.trim() ? "white" : "rgba(255,255,255,0.3)",
+                    fontWeight: 700, fontSize: 12, cursor: userMessageText.trim() ? "pointer" : "default"
+                  }}>
+                  {userSendingMessage ? "..." : "Send"}
+                </button>
+              </div>
+            </div>
+
+            {/* Messages below */}
             <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
               {messages.length === 0 && (
                 <div style={{ textAlign: "center", padding: "40px 0" }}>
@@ -404,47 +446,6 @@ export default function Groups() {
                 </div>
               ))}
               <div ref={messagesEndRef} />
-            </div>
-
-            {/* Non-admins can send messages */}
-            <div className="flex-shrink-0 px-4 py-3 border-t border-zinc-800">
-              <div style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                borderRadius: 16, padding: "8px 12px",
-                display: "flex", alignItems: "center", gap: 8
-              }}>
-                <label style={{ flexShrink: 0, cursor: "pointer" }}>
-                  <span style={{ fontSize: 20 }}>{userUploadingMedia ? "⏳" : "📎"}</span>
-                  <input type="file" accept="image/*,video/*"
-                    className="hidden" disabled={userUploadingMedia}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file && activeGroup) sendUserMedia(activeGroup.id, file)
-                    }} />
-                </label>
-                <input
-                  value={userMessageText}
-                  onChange={e => setUserMessageText(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && activeGroup) sendUserMessage(activeGroup.id) }}
-                  placeholder="Send a message..."
-                  style={{
-                    flex: 1, background: "transparent", border: "none",
-                    color: "white", fontSize: 13, outline: "none"
-                  }}
-                />
-                <button onClick={() => activeGroup && sendUserMessage(activeGroup.id)} 
-                  disabled={userSendingMessage || !userMessageText.trim()}
-                  style={{
-                    flexShrink: 0, padding: "6px 14px",
-                    background: userMessageText.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "rgba(255,255,255,0.08)",
-                    border: "none", borderRadius: 10,
-                    color: userMessageText.trim() ? "white" : "rgba(255,255,255,0.3)",
-                    fontWeight: 700, fontSize: 12, cursor: userMessageText.trim() ? "pointer" : "default"
-                  }}>
-                  {userSendingMessage ? "..." : "Send"}
-                </button>
-              </div>
             </div>
           </div>
         )}
