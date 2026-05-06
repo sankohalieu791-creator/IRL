@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next"
+import { Analytics } from "@vercel/analytics/react"
+// @ts-ignore: CSS import handled by Next.js
 import "./globals.css"
 import AuthGuard from "@/components/AuthGuard"
 
@@ -38,6 +40,7 @@ export default function RootLayout({
       </head>
       <body className="bg-black min-h-screen overflow-hidden">
         <AuthGuard>{children}</AuthGuard>
+        <Analytics />
       </body>
     </html>
   )
