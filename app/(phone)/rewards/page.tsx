@@ -283,28 +283,28 @@ export default function Rewards() {
         <p className="text-zinc-500 text-xs mb-3">Earn status. Get recognised. Prove yourself IRL.</p>
 
         {/* LP CARD */}
-        <div className="rounded-[28px] bg-gradient-to-br from-purple-950/90 via-zinc-950 to-cyan-950/80 border border-cyan-500/20 p-3 text-center shadow-[0_30px_70px_rgba(0,0,0,0.35)]">
-          <p className="text-zinc-400 text-[10px] uppercase tracking-[0.4em] mb-2">Your LinkPoints</p>
-          <span className="text-5xl font-black text-white block mb-1"
-            style={{ textShadow: "0 0 24px rgba(0,212,255,0.35)" }}>
+        <div className="rounded-2xl bg-gradient-to-br from-purple-900/70 via-zinc-900/80 to-cyan-900/60 border border-cyan-500/25 p-2.5 text-center shadow-[0_20px_50px_rgba(0,0,0,0.25)] max-w-sm mx-auto">
+          <p className="text-zinc-400 text-[9px] uppercase tracking-[0.3em] mb-1.5">Your LinkPoints</p>
+          <span className="text-4xl font-black text-white block mb-0.5"
+            style={{ textShadow: "0 0 20px rgba(0,212,255,0.3)" }}>
             {points}
           </span>
-          <span className="text-cyan-400 font-bold text-lg">LP</span>
-          <div className="w-14 h-[3px] bg-gradient-to-r from-purple-500 to-cyan-400 mx-auto my-3 rounded-full" />
-          <div className="grid grid-cols-3 gap-3 text-center mb-3">
+          <span className="text-cyan-400 font-bold text-base">LP</span>
+          <div className="w-12 h-[2px] bg-gradient-to-r from-purple-500 to-cyan-400 mx-auto my-2.5 rounded-full" />
+          <div className="grid grid-cols-3 gap-2 text-center mb-2.5">
             <div>
-              <p className="text-base font-bold text-green-400">{claimedCount}</p>
-              <p className="text-zinc-500 text-[11px] uppercase tracking-[0.18em]">Earned</p>
+              <p className="text-sm font-bold text-green-400">{claimedCount}</p>
+              <p className="text-zinc-500 text-[10px] uppercase tracking-[0.15em]">Earned</p>
             </div>
-            <div className="h-8 border-l border-r border-zinc-800" />
+            <div className="h-6 border-l border-r border-zinc-700" />
             <div>
-              <p className="text-base font-bold text-cyan-400">{sessionCount}</p>
-              <p className="text-zinc-500 text-[11px] uppercase tracking-[0.18em]">Sessions</p>
+              <p className="text-sm font-bold text-cyan-400">{sessionCount}</p>
+              <p className="text-zinc-500 text-[10px] uppercase tracking-[0.15em]">Sessions</p>
             </div>
-            <div className="h-8 border-l border-zinc-800" />
+            <div className="h-6 border-l border-zinc-700" />
             <div>
-              <p className="text-base font-bold text-purple-400">{rewards.length}</p>
-              <p className="text-zinc-500 text-[11px] uppercase tracking-[0.18em]">Rewards</p>
+              <p className="text-sm font-bold text-purple-400">{rewards.length}</p>
+              <p className="text-zinc-500 text-[10px] uppercase tracking-[0.15em]">Rewards</p>
             </div>
           </div>
           {!loading && nextReward && (
@@ -332,7 +332,7 @@ export default function Rewards() {
             <div className="h-px flex-1 bg-zinc-800" />
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             {sessionAchievements.map((a) => {
               const isClaimed = claimed.includes(a.id)
               const unlocked = sessionCount >= a.sessions
@@ -340,134 +340,76 @@ export default function Rewards() {
               const progress = Math.min((sessionCount / a.sessions) * 100, 100)
 
               return (
-                <div key={a.id} style={{
-                  borderRadius: 18,
-                  padding: "14px 14px",
-                  background: isClaimed
-                    ? a.isVerified
-                      ? "linear-gradient(135deg, rgba(0,212,255,0.08), rgba(180,0,255,0.08))"
-                      : `${a.color}0A`
-                    : unlocked
-                    ? "rgba(255,255,255,0.03)"
-                    : "rgba(255,255,255,0.015)",
-                  border: isClaimed
-                    ? a.isVerified
-                      ? "1px solid rgba(0,212,255,0.35)"
-                      : `1px solid ${a.color}40`
-                    : unlocked
-                    ? `1px solid ${a.color}30`
-                    : "1px solid rgba(255,255,255,0.06)",
-                  boxShadow: isClaimed && a.isVerified
-                    ? "0 0 30px rgba(0,212,255,0.12), 0 0 60px rgba(180,0,255,0.08)"
-                    : "none",
-                  opacity: !unlocked && !isClaimed ? 0.55 : 1,
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-
-                    {/* Badge icon */}
-                    <div style={{ flexShrink: 0 }}>
-                      {a.isVerified ? (
-                        <VerifiedBadge size={52} earned={isClaimed || unlocked} />
+                <div key={a.id} className="overflow-hidden rounded-[28px] border border-zinc-700/50 shadow-[0_20px_80px_rgba(0,0,0,0.25)] bg-gradient-to-br from-zinc-900/80 via-zinc-800/60 to-zinc-900/80">
+                  <div className="relative h-40">
+                    <div className="h-full w-full bg-gradient-to-br from-purple-900/40 via-zinc-900/50 to-cyan-900/40" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/90 via-zinc-900/50 to-transparent" />
+                    <div className="absolute top-4 left-4 rounded-full bg-black/40 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+                      Achievement
+                    </div>
+                    <div className="absolute top-4 right-4 rounded-full bg-white/10 border border-white/10 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+                      {a.sessions} Sessions
+                    </div>
+                    {isClaimed && a.isVerified && (
+                      <div className="absolute left-4 bottom-16 rounded-2xl bg-cyan-500/20 border border-cyan-400/30 px-3 py-1.5 text-[10px] font-semibold text-cyan-200 backdrop-blur-sm">
+                        FOUNDING MEMBER
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4 pb-4">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <p className="text-zinc-400 text-xs uppercase tracking-[0.2em] font-semibold">
+                        SESSION MILESTONE
+                      </p>
+                      {isClaimed ? (
+                        <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-[11px] font-bold text-emerald-300 border border-emerald-500/30">
+                          EARNED
+                        </span>
+                      ) : unlocked ? (
+                        <span className="rounded-full bg-cyan-400/15 px-3 py-1 text-[11px] font-bold text-cyan-300 border border-cyan-400/30">
+                          READY
+                        </span>
                       ) : (
-                        <div style={{
-                          width: 52, height: 52, borderRadius: "50%",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 24,
-                          background: isClaimed ? `${a.color}18` : "rgba(255,255,255,0.04)",
-                          border: `2px solid ${isClaimed ? a.color + "60" : "rgba(255,255,255,0.08)"}`,
-                          boxShadow: isClaimed ? `0 0 18px ${a.color}30` : "none",
-                        }}>
-                          {isClaimed ? (
-                            a.sessions === 10 ? "🔥" :
-                            a.sessions === 30 ? "💪" :
-                            a.sessions === 50 ? "👑" :
-                            "🌟"
-                          ) : "🔒"}
-                        </div>
+                        <span className="rounded-full bg-zinc-700/60 px-3 py-1 text-[11px] font-bold text-zinc-300 border border-zinc-600/50">
+                          {a.sessions - sessionCount} MORE
+                        </span>
                       )}
                     </div>
-
-                    {/* Text */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                        <p style={{
-                          color: isClaimed ? (a.isVerified ? "#00D4FF" : "white") : unlocked ? "white" : "rgba(255,255,255,0.3)",
-                          fontWeight: 800, fontSize: 13, lineHeight: 1.2
-                        }}>
-                          {a.title}
-                        </p>
-                        {isClaimed && a.isVerified && (
-                          <span style={{
-                            background: "linear-gradient(135deg, rgba(0,212,255,0.2), rgba(180,0,255,0.2))",
-                            border: "1px solid rgba(0,212,255,0.4)",
-                            color: "#00D4FF", fontSize: 8, fontWeight: 800,
-                            padding: "2px 7px", borderRadius: 100, letterSpacing: 1,
-                            flexShrink: 0
-                          }}>FOUNDING</span>
-                        )}
+                    <h2 className="text-lg font-bold text-white leading-tight mb-2">
+                      {a.title}
+                    </h2>
+                    <p className="text-zinc-300 text-sm leading-5 mb-3">
+                      {a.description}
+                    </p>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="flex-1 bg-zinc-700/50 rounded-full h-2">
+                        <div className={`h-2 rounded-full transition-all duration-700 ${
+                          isClaimed ? 'bg-gradient-to-r from-emerald-500 to-cyan-400' :
+                          unlocked ? 'bg-gradient-to-r from-purple-500 to-cyan-400' :
+                          'bg-gradient-to-r from-zinc-600 to-zinc-500'
+                        }`} style={{ width: `${progress}%` }} />
                       </div>
-                      <p style={{
-                        color: "rgba(255,255,255,0.3)", fontSize: 11,
-                        lineHeight: 1.4, marginBottom: 8
-                      }}>
-                        {a.description}
-                      </p>
-                      {/* Progress bar */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{
-                          flex: 1, height: 3,
-                          background: "rgba(255,255,255,0.07)",
-                          borderRadius: 100, overflow: "hidden"
-                        }}>
-                          <div style={{
-                            width: `${progress}%`, height: "100%",
-                            background: isClaimed
-                              ? a.isVerified
-                                ? "linear-gradient(to right, #00D4FF, #B400FF)"
-                                : `linear-gradient(to right, ${a.color}, ${a.color}aa)`
-                              : "linear-gradient(to right, #B400FF, #00D4FF)",
-                            borderRadius: 100,
-                            transition: "width 0.7s ease"
-                          }} />
-                        </div>
-                        <span style={{
-                          color: isClaimed ? a.color : "rgba(255,255,255,0.2)",
-                          fontSize: 10, fontWeight: 700, flexShrink: 0
-                        }}>
-                          {Math.min(sessionCount, a.sessions)}/{a.sessions}
-                        </span>
-                      </div>
+                      <span className="text-xs font-semibold text-zinc-400">
+                        {Math.min(sessionCount, a.sessions)}/{a.sessions}
+                      </span>
                     </div>
-
-                    {/* Action */}
-                    <div style={{ flexShrink: 0, minWidth: 52, textAlign: "center" }}>
+                    <div className="flex justify-center">
                       {isClaimed ? (
-                        <p style={{
-                          color: a.isVerified ? "#00D4FF" : a.color,
-                          fontSize: 10, fontWeight: 800
-                        }}>EARNED<br />✓</p>
+                        <div className="flex items-center gap-2 text-emerald-400">
+                          <VerifiedBadge size={32} earned={true} />
+                          <span className="text-sm font-bold">Earned ✓</span>
+                        </div>
                       ) : canClaim ? (
                         <button
                           onClick={() => claimSessionReward(a.id)}
                           disabled={claiming === a.id}
-                          style={{
-                            padding: "8px 12px",
-                            background: a.isVerified
-                              ? "linear-gradient(135deg, #00D4FF, #B400FF)"
-                              : `linear-gradient(135deg, ${a.color}, ${a.color}cc)`,
-                            border: "none", borderRadius: 10,
-                            color: "white", fontWeight: 800,
-                            fontSize: 11, cursor: "pointer",
-                            boxShadow: a.isVerified
-                              ? "0 4px 16px rgba(0,212,255,0.35)"
-                              : `0 4px 16px ${a.color}30`
-                          }}
+                          className="bg-gradient-to-r from-purple-500 to-cyan-400 text-zinc-950 px-6 py-2.5 rounded-full text-sm font-bold shadow-[0_8px_25px_rgba(180,0,255,0.3)] hover:opacity-95 transition-opacity"
                         >
-                          {claiming === a.id ? "..." : "CLAIM"}
+                          {claiming === a.id ? "Claiming..." : "Claim Now"}
                         </button>
                       ) : (
-                        <p style={{ color: "rgba(255,255,255,0.2)", fontSize: 10, lineHeight: 1.4 }}>
-                          {a.sessions - sessionCount} more<br />sessions
+                        <p className="text-zinc-500 text-sm">
+                          Complete {a.sessions - sessionCount} more sessions
                         </p>
                       )}
                     </div>
@@ -487,43 +429,56 @@ export default function Rewards() {
           </div>
           <p className="text-zinc-700 text-xs text-center mb-4">Awarded by your institution — you cannot claim these yourself</p>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             {recognitionAwards.map((r) => {
               const isClaimed = claimed.includes(r.id)
               return (
-                <div key={r.id} style={{
-                  borderRadius: 16, padding: "14px 14px",
-                  background: isClaimed ? `${r.color}08` : "rgba(255,255,255,0.015)",
-                  border: `1px solid ${isClaimed ? r.glow : "rgba(255,255,255,0.06)"}`,
-                  opacity: isClaimed ? 1 : 0.45,
-                  boxShadow: isClaimed ? `0 0 24px ${r.glow}` : "none",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{
-                      width: 52, height: 52, borderRadius: "50%",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 26, flexShrink: 0,
-                      background: isClaimed ? `${r.color}15` : "rgba(255,255,255,0.04)",
-                      border: `2px solid ${isClaimed ? r.glow : "rgba(255,255,255,0.06)"}`,
-                      boxShadow: isClaimed ? `0 0 20px ${r.glow}` : "none"
-                    }}>
+                <div key={r.id} className="overflow-hidden rounded-[28px] border border-zinc-700/50 shadow-[0_20px_80px_rgba(0,0,0,0.25)] bg-gradient-to-br from-zinc-900/80 via-zinc-800/60 to-zinc-900/80">
+                  <div className="relative h-40">
+                    <div className={`h-full w-full bg-gradient-to-br ${
+                      isClaimed ? 'from-purple-900/50 via-zinc-900/60 to-cyan-900/50' : 'from-zinc-800/60 via-zinc-700/40 to-zinc-800/60'
+                    }`} />
+                    <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/90 via-zinc-900/50 to-transparent" />
+                    <div className="absolute top-4 left-4 rounded-full bg-black/40 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+                      Recognition
+                    </div>
+                    <div className="absolute top-4 right-4 rounded-full bg-white/10 border border-white/10 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
                       {r.icon}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{
-                        color: isClaimed ? "white" : "rgba(255,255,255,0.25)",
-                        fontWeight: 800, fontSize: 13, marginBottom: 3
-                      }}>{r.title}</p>
-                      <p style={{
-                        color: "rgba(255,255,255,0.25)", fontSize: 11, lineHeight: 1.4
-                      }}>{r.description}</p>
+                  </div>
+                  <div className="p-4 pb-4">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <p className="text-zinc-400 text-xs uppercase tracking-[0.2em] font-semibold">
+                        INSTITUTION AWARD
+                      </p>
+                      {isClaimed ? (
+                        <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-[11px] font-bold text-emerald-300 border border-emerald-500/30">
+                          EARNED
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-zinc-700/60 px-3 py-1 text-[11px] font-bold text-zinc-400 border border-zinc-600/50">
+                          LOCKED
+                        </span>
+                      )}
                     </div>
-                    {isClaimed && (
-                      <p style={{
-                        color: r.color, fontSize: 10,
-                        fontWeight: 800, flexShrink: 0
-                      }}>EARNED<br />✓</p>
-                    )}
+                    <h2 className="text-lg font-bold text-white leading-tight mb-2">
+                      {r.title}
+                    </h2>
+                    <p className="text-zinc-300 text-sm leading-5 mb-3">
+                      {r.description}
+                    </p>
+                    <div className="flex justify-center">
+                      {isClaimed ? (
+                        <div className="flex items-center gap-2 text-emerald-400">
+                          <span className="text-2xl">{r.icon}</span>
+                          <span className="text-sm font-bold">Awarded ✓</span>
+                        </div>
+                      ) : (
+                        <p className="text-zinc-500 text-sm">
+                          Awarded by your institution
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
@@ -554,23 +509,23 @@ export default function Rewards() {
                 const lpAway = Math.max(reward.points_required - points, 0)
 
                 return (
-                  <div key={reward.id} className="overflow-hidden rounded-[32px] border border-zinc-800 shadow-[0_28px_120px_rgba(0,0,0,0.35)] bg-zinc-950">
-                    <div className="relative h-56">
+                  <div key={reward.id} className="overflow-hidden rounded-[28px] border border-zinc-700/50 shadow-[0_20px_80px_rgba(0,0,0,0.25)] bg-gradient-to-br from-zinc-900/80 via-zinc-800/60 to-zinc-900/80">
+                    <div className="relative h-48">
                       {reward.image_url ? (
                         <img src={reward.image_url} alt={reward.title}
                           className="h-full w-full object-cover" />
                       ) : (
-                        <div className="h-full w-full bg-gradient-to-br from-purple-900 via-zinc-900 to-cyan-900" />
+                        <div className="h-full w-full bg-gradient-to-br from-purple-900/50 via-zinc-900/60 to-cyan-900/50" />
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/95 via-zinc-950/40 to-transparent" />
-                      <div className="absolute top-4 left-4 rounded-full bg-black/50 px-3 py-2 text-xs font-semibold text-white backdrop-blur-sm">
+                      <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/85 via-zinc-900/50 to-transparent" />
+                      <div className="absolute top-4 left-4 rounded-full bg-black/40 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
                         {reward.business_name || "Local Reward"}
                       </div>
-                      <div className="absolute top-4 right-4 rounded-full bg-white/10 border border-white/10 px-3 py-2 text-xs font-semibold text-white backdrop-blur-sm">
+                      <div className="absolute top-4 right-4 rounded-full bg-white/10 border border-white/10 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
                         {reward.points_required} LP
                       </div>
                       {reward.reward_type === "voucher" && reward.voucher_code && (
-                        <div className="absolute left-4 bottom-20 rounded-2xl bg-white/10 border border-white/10 px-3 py-2 text-[11px] font-semibold text-cyan-200 backdrop-blur-sm">
+                        <div className="absolute left-4 bottom-16 rounded-2xl bg-white/10 border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-cyan-200 backdrop-blur-sm">
                           Voucher code: {reward.voucher_code}
                         </div>
                       )}
