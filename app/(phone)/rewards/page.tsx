@@ -283,28 +283,28 @@ export default function Rewards() {
         <p className="text-zinc-500 text-xs mb-3">Earn status. Get recognised. Prove yourself IRL.</p>
 
         {/* LP CARD */}
-        <div className="rounded-2xl bg-gradient-to-br from-purple-900/60 via-zinc-900 to-cyan-900/40 border border-cyan-500/30 p-4 text-center">
-          <p className="text-zinc-400 text-xs uppercase tracking-widest mb-1">Your LinkPoints</p>
-          <span className="text-6xl font-black text-white block mb-1"
-            style={{ textShadow: "0 0 30px rgba(0,212,255,0.4)" }}>
+        <div className="rounded-[28px] bg-gradient-to-br from-purple-950/90 via-zinc-950 to-cyan-950/80 border border-cyan-500/20 p-3 text-center shadow-[0_30px_70px_rgba(0,0,0,0.35)]">
+          <p className="text-zinc-400 text-[10px] uppercase tracking-[0.4em] mb-2">Your LinkPoints</p>
+          <span className="text-5xl font-black text-white block mb-1"
+            style={{ textShadow: "0 0 24px rgba(0,212,255,0.35)" }}>
             {points}
           </span>
-          <span className="text-cyan-400 font-bold text-xl">LP</span>
-          <div className="w-16 h-0.5 bg-gradient-to-r from-purple-500 to-cyan-400 mx-auto my-3 rounded-full" />
-          <div className="flex justify-center gap-6 mb-3">
-            <div className="text-center">
-              <p className="text-lg font-bold text-green-400">{claimedCount}</p>
-              <p className="text-zinc-500 text-xs">Earned</p>
+          <span className="text-cyan-400 font-bold text-lg">LP</span>
+          <div className="w-14 h-[3px] bg-gradient-to-r from-purple-500 to-cyan-400 mx-auto my-3 rounded-full" />
+          <div className="grid grid-cols-3 gap-3 text-center mb-3">
+            <div>
+              <p className="text-base font-bold text-green-400">{claimedCount}</p>
+              <p className="text-zinc-500 text-[11px] uppercase tracking-[0.18em]">Earned</p>
             </div>
-            <div className="w-px bg-zinc-700" />
-            <div className="text-center">
-              <p className="text-lg font-bold text-cyan-400">{sessionCount}</p>
-              <p className="text-zinc-500 text-xs">Sessions</p>
+            <div className="h-8 border-l border-r border-zinc-800" />
+            <div>
+              <p className="text-base font-bold text-cyan-400">{sessionCount}</p>
+              <p className="text-zinc-500 text-[11px] uppercase tracking-[0.18em]">Sessions</p>
             </div>
-            <div className="w-px bg-zinc-700" />
-            <div className="text-center">
-              <p className="text-lg font-bold text-purple-400">{rewards.length}</p>
-              <p className="text-zinc-500 text-xs">LP Rewards</p>
+            <div className="h-8 border-l border-zinc-800" />
+            <div>
+              <p className="text-base font-bold text-purple-400">{rewards.length}</p>
+              <p className="text-zinc-500 text-[11px] uppercase tracking-[0.18em]">Rewards</p>
             </div>
           </div>
           {!loading && nextReward && (
