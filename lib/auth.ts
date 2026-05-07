@@ -128,7 +128,7 @@ export async function login(codeOrUsername: string, password: string) {
   return { success: true, role: user.role }
 }
 
-function saveToStorage(userName: string, school: string, role: string) {
+export function saveToStorage(userName: string, school: string, role: string) {
   if (typeof window === "undefined") return
 
   try {

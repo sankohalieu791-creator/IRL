@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import bcrypt from "bcryptjs"
+import { saveToStorage } from "@/lib/auth"
 
 type Institution = { id: string; name: string; type: string }
 
@@ -29,29 +29,25 @@ export default function LoginPage() {
 
   const filtered = institutions.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
 
-  function saveToStorage(userName: string, school: string, role: string) {
-    localStorage.setItem("irl_user", userName)
-    localStorage.setItem("irl_school", school)
-    localStorage.setItem("irl_role", role)
-    sessionStorage.setItem("irl_user", userName)
-    sessionStorage.setItem("irl_school", school)
-    sessionStorage.setItem("irl_role", role)
-    const expires = new Date()
-    expires.setFullYear(expires.getFullYear() + 2)
-    const opts = `expires=${expires.toUTCString()}; path=/; SameSite=Lax`
-    document.cookie = `irl_user=${encodeURIComponent(userName)}; ${opts}`
-    document.cookie = `irl_school=${encodeURIComponent(school)}; ${opts}`
-    document.cookie = `irl_role=${role}; ${opts}`
-  }
-
   async function handleStudentLogin() {
     if (!username || !password) { setError("Please fill in all fields"); return }
     setLoading(true); setError("")
-    const { data: user } = await supabase.from("users").select("*").eq("user_name", username).eq("role", "student").maybeSingle()
-    if (!user) { setError("Username not found"); setLoading(false); return }
-    const match = await bcrypt.compare(password, user.password)
-    if (!match) { setError("Incorrect password"); setLoading(false); return }
-    saveToStorage(user.user_name, user.school, user.role)
+
+    const res = await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, mode: "student-login" })
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      setError(data.error)
+      setLoading(false)
+      return
+    }
+
+    saveToStorage(data.user.user_name, data.user.school, data.user.role)
     router.push("/sessions")
     setLoading(false)
   }
@@ -60,17 +56,22 @@ export default function LoginPage() {
     if (!username || !password || !selectedInstitution) { setError("Please fill in all fields and select your institution"); return }
     if (password.length < 6) { setError("Password must be at least 6 characters"); return }
     setLoading(true); setError("")
-    const { data: existing } = await supabase.from("users").select("id").eq("user_name", username).maybeSingle()
-    if (existing) { setError("Username already taken"); setLoading(false); return }
-    const hashed = await bcrypt.hash(password, 10)
-    const { error: err } = await supabase.from("users").insert({
-      user_name: username, school: selectedInstitution,
-      institution_name: selectedInstitution, role: "student",
-      code: `IRL-${username.toUpperCase().replace(/\s/g, "")}`, password: hashed
+
+    const res = await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, mode: "student-signup", selectedInstitution })
     })
-    if (err) { setError(`Failed: ${err.message}`); setLoading(false); return }
-    await supabase.from("leaderboard").insert({ user_name: username, points: 0 })
-    saveToStorage(username, selectedInstitution, "student")
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      setError(data.error)
+      setLoading(false)
+      return
+    }
+
+    saveToStorage(data.user.user_name, data.user.school, data.user.role)
     router.push("/sessions")
     setLoading(false)
   }
@@ -79,37 +80,21 @@ export default function LoginPage() {
     if (!adminCode || !password) { setError("Please fill in all fields"); return }
     setLoading(true); setError("")
 
-    const { data: existingUser } = await supabase.from("users")
-      .select("*").eq("code", adminCode.toUpperCase()).eq("role", "admin").maybeSingle()
-
-    if (existingUser) {
-      const match = await bcrypt.compare(password, existingUser.password)
-      if (!match) { setError("Incorrect password"); setLoading(false); return }
-      saveToStorage(existingUser.user_name, existingUser.school, existingUser.role)
-      router.push("/admin")
-      setLoading(false)
-      return
-    }
-
-    const { data: invite } = await supabase.from("invite_codes")
-      .select("*").eq("code", adminCode.toUpperCase()).eq("used", false).maybeSingle()
-
-    if (!invite || invite.role !== "admin") {
-      setError("Invalid admin code")
-      setLoading(false)
-      return
-    }
-
-    const hashed = await bcrypt.hash(password, 10)
-    const { error: err } = await supabase.from("users").insert({
-      user_name: invite.user_name, school: invite.school,
-      role: "admin", code: adminCode.toUpperCase(), password: hashed
+    const res = await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adminCode, password, mode: "admin" })
     })
-    if (err) { setError(`Failed: ${err.message}`); setLoading(false); return }
 
-    await supabase.from("invite_codes").update({ used: true }).eq("code", adminCode.toUpperCase())
-    await supabase.from("leaderboard").insert({ user_name: invite.user_name, points: 0 })
-    saveToStorage(invite.user_name, invite.school, "admin")
+    const data = await res.json()
+
+    if (!res.ok) {
+      setError(data.error)
+      setLoading(false)
+      return
+    }
+
+    saveToStorage(data.user.user_name, data.user.school, data.user.role)
     router.push("/admin")
     setLoading(false)
   }
