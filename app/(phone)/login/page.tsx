@@ -23,8 +23,13 @@ export default function LoginPage() {
   useEffect(() => { loadInstitutions() }, [])
 
   async function loadInstitutions() {
-    const { data } = await supabase.from("institutions").select("*").order("name", { ascending: true })
-    if (data) setInstitutions(data)
+    try {
+      const { data } = await supabase.from("institutions").select("*").order("name", { ascending: true })
+      if (data) setInstitutions(data)
+    } catch (err) {
+      console.error("Failed to load institutions:", err)
+      setError("Failed to load institutions. Please refresh.")
+    }
   }
 
   const filtered = institutions.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
@@ -33,22 +38,26 @@ export default function LoginPage() {
     if (!username || !password) { setError("Please fill in all fields"); return }
     setLoading(true); setError("")
 
-    const res = await fetch("/api/auth", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password, mode: "student-login" })
-    })
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password, mode: "student-login" })
+      })
 
-    const data = await res.json()
+      const data = await res.json()
 
-    if (!res.ok) {
-      setError(data.error)
-      setLoading(false)
-      return
+      if (!res.ok) {
+        setError(data.error || "Login failed")
+        setLoading(false)
+        return
+      }
+
+      saveToStorage(data.user.user_name, data.user.school, data.user.role)
+      router.push("/sessions")
+    } catch (err) {
+      setError("Network error. Please try again.")
     }
-
-    saveToStorage(data.user.user_name, data.user.school, data.user.role)
-    router.push("/sessions")
     setLoading(false)
   }
 
@@ -57,22 +66,26 @@ export default function LoginPage() {
     if (password.length < 6) { setError("Password must be at least 6 characters"); return }
     setLoading(true); setError("")
 
-    const res = await fetch("/api/auth", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password, mode: "student-signup", selectedInstitution })
-    })
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password, mode: "student-signup", selectedInstitution })
+      })
 
-    const data = await res.json()
+      const data = await res.json()
 
-    if (!res.ok) {
-      setError(data.error)
-      setLoading(false)
-      return
+      if (!res.ok) {
+        setError(data.error || "Signup failed")
+        setLoading(false)
+        return
+      }
+
+      saveToStorage(data.user.user_name, data.user.school, data.user.role)
+      router.push("/sessions")
+    } catch (err) {
+      setError("Network error. Please try again.")
     }
-
-    saveToStorage(data.user.user_name, data.user.school, data.user.role)
-    router.push("/sessions")
     setLoading(false)
   }
 
@@ -80,22 +93,26 @@ export default function LoginPage() {
     if (!adminCode || !password) { setError("Please fill in all fields"); return }
     setLoading(true); setError("")
 
-    const res = await fetch("/api/auth", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ adminCode, password, mode: "admin" })
-    })
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminCode, password, mode: "admin" })
+      })
 
-    const data = await res.json()
+      const data = await res.json()
 
-    if (!res.ok) {
-      setError(data.error)
-      setLoading(false)
-      return
+      if (!res.ok) {
+        setError(data.error || "Login failed")
+        setLoading(false)
+        return
+      }
+
+      saveToStorage(data.user.user_name, data.user.school, data.user.role)
+      router.push("/admin")
+    } catch (err) {
+      setError("Network error. Please try again.")
     }
-
-    saveToStorage(data.user.user_name, data.user.school, data.user.role)
-    router.push("/admin")
     setLoading(false)
   }
 

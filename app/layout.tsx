@@ -40,7 +40,7 @@ export default function RootLayout({
       </head>
       <body className="bg-black min-h-screen overflow-hidden">
         <AuthGuard>{children}</AuthGuard>
-        <Analytics />
+        {process.env.VERCEL && <Analytics />}
       </body>
     </html>
   )
