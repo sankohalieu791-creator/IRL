@@ -143,12 +143,17 @@ export function saveToStorage(userName: string, school: string, role: string) {
     sessionStorage.setItem("irl_role", role)
   } catch {}
 
-  const expires = new Date()
-  expires.setFullYear(expires.getFullYear() + 2)
-  const cookieOptions = `expires=${expires.toUTCString()}; path=/; SameSite=Lax`
-  document.cookie = `irl_user=${encodeURIComponent(userName)}; ${cookieOptions}`
-  document.cookie = `irl_school=${encodeURIComponent(school)}; ${cookieOptions}`
-  document.cookie = `irl_role=${encodeURIComponent(role)}; ${cookieOptions}`
+  try {
+    const expires = new Date()
+    expires.setFullYear(expires.getFullYear() + 2)
+    const domain = window.location.hostname === "localhost" ? "" : "; domain=.joinirl.co.uk"
+    const cookieOptions = `expires=${expires.toUTCString()}; path=/${domain}; SameSite=Lax; Secure`
+    document.cookie = `irl_user=${userName}; ${cookieOptions}`
+    document.cookie = `irl_school=${school}; ${cookieOptions}`
+    document.cookie = `irl_role=${role}; ${cookieOptions}`
+  } catch (err) {
+    console.error("Failed to set cookies:", err)
+  }
 }
 
 export function getUser(): string | null {
@@ -175,9 +180,16 @@ export function getRole(): string | null {
 function getCookieValue(name: string): string | null {
   if (typeof document === "undefined") return null
   try {
-    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
-    return match ? decodeURIComponent(match[2]) : null
-  } catch {
+    const cookies = document.cookie.split("; ")
+    for (const cookie of cookies) {
+      const [key, value] = cookie.split("=")
+      if (key === name && value) {
+        return value
+      }
+    }
+    return null
+  } catch (err) {
+    console.error(`Failed to read cookie ${name}:`, err)
     return null
   }
 }
@@ -194,7 +206,12 @@ export function logout() {
   sessionStorage.removeItem("irl_user")
   sessionStorage.removeItem("irl_school")
   sessionStorage.removeItem("irl_role")
-  document.cookie = "irl_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
-  document.cookie = "irl_school=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
-  document.cookie = "irl_role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
+  try {
+    const domain = window.location.hostname === "localhost" ? "" : "; domain=.joinirl.co.uk"
+    document.cookie = `irl_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${domain}`
+    document.cookie = `irl_school=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${domain}`
+    document.cookie = `irl_role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${domain}`
+  } catch (err) {
+    console.error("Failed to clear cookies:", err)
+  }
 }

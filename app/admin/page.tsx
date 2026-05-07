@@ -56,12 +56,17 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const load = async () => {
-      if (tab === "sessions") await loadSessions()
-      if (tab === "codes") await loadCodes()
-      if (tab === "proofs") await loadProofs()
-      if (tab === "students") await loadStudents()
-      if (tab === "groups") { await loadGroups(); await loadPendingMembers() }
-      if (tab === "rewards") await loadRewards()
+      try {
+        if (tab === "sessions") await loadSessions()
+        if (tab === "codes") await loadCodes()
+        if (tab === "proofs") await loadProofs()
+        if (tab === "students") await loadStudents()
+        if (tab === "groups") { await loadGroups(); await loadPendingMembers() }
+        if (tab === "rewards") await loadRewards()
+      } catch (error) {
+        console.error("Error loading data:", error)
+        alert("Failed to load data. Please refresh.")
+      }
     }
     load()
   }, [tab])
