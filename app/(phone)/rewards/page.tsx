@@ -529,6 +529,13 @@ export default function Rewards() {
                           Voucher code: {reward.voucher_code}
                         </div>
                       )}
+                      {reward.icon && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="text-6xl opacity-15 transform rotate-12 drop-shadow-lg">
+                            {reward.icon}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="p-5 pb-5">
                       <div className="flex items-center justify-between gap-3 mb-2">

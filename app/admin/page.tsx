@@ -93,22 +93,49 @@ export default function AdminDashboard() {
 
     const usernames = schoolStudents.map(s => s.user_name)
 
-    const { data } = await supabase
+    // Load session attempt proofs
+    const { data: attemptProofs } = await supabase
       .from("session_attempts")
       .select("*")
       .in("user_name", usernames)
       .not("proof_url", "is", null)
       .order("created_at", { ascending: false })
 
-    if (!data) return
-    const withTitles = await Promise.all(
-      data.map(async (p) => {
-        const { data: session } = await supabase.from("sessions").select("title, institution").eq("id", p.session_id).maybeSingle()
-        return { ...p, session_title: session?.title || "Unknown", institution: session?.institution }
-      })
-    )
-    const filtered = withTitles.filter(p => p.institution === SCHOOL)
-    setProofs(filtered)
+    // Load hub posts as proofs
+    const { data: hubPosts } = await supabase
+      .from("hub_posts")
+      .select("*")
+      .in("user_name", usernames)
+      .order("created_at", { ascending: false })
+
+    let allProofs: any[] = []
+
+    if (attemptProofs) {
+      const withTitles = await Promise.all(
+        attemptProofs.map(async (p) => {
+          const { data: session } = await supabase.from("sessions").select("title, institution").eq("id", p.session_id).maybeSingle()
+          return { ...p, session_title: session?.title || "Unknown", institution: session?.institution, type: "session_proof" }
+        })
+      )
+      const filtered = withTitles.filter(p => p.institution === SCHOOL)
+      allProofs = [...allProofs, ...filtered]
+    }
+
+    if (hubPosts) {
+      const hubProofs = hubPosts.map(p => ({
+        ...p,
+        id: `hub_${p.id}`,
+        session_title: p.session_title,
+        proof_url: p.media_url,
+        status: "posted",
+        type: "hub_post"
+      }))
+      allProofs = [...allProofs, ...hubProofs]
+    }
+
+    // Sort by created_at descending
+    allProofs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    setProofs(allProofs)
   }
 
   async function loadMembers() {
@@ -494,23 +521,29 @@ export default function AdminDashboard() {
                     <div>
                       <p className="font-bold text-white">{p.user_name}</p>
                       <p className="text-zinc-500 text-sm">{p.session_title}</p>
+                      {p.type === "hub_post" && (
+                        <p className="text-cyan-400 text-xs">📱 Hub Post</p>
+                      )}
                     </div>
                     <span className={`text-xs px-3 py-1 rounded-full font-semibold ${
+                      p.type === "hub_post" ? "bg-cyan-500/20 text-cyan-400" :
                       p.status === "accepted" ? "bg-green-500/20 text-green-400" :
                       p.status === "declined" ? "bg-red-500/20 text-red-400" :
                       "bg-yellow-500/20 text-yellow-400"
-                    }`}>{p.status}</span>
+                    }`}>
+                      {p.type === "hub_post" ? "Posted to Hub" : p.status}
+                    </span>
                   </div>
                   {p.proof_url && (
                     <div className="mb-4 rounded-xl overflow-hidden">
-                      {p.proof_url.match(/\.(mp4|mov|avi)$/i) ? (
+                      {p.media_type === "video" || p.proof_url.match(/\.(mp4|mov|avi)$/i) ? (
                         <video src={p.proof_url} controls className="w-full max-h-64 object-cover" />
                       ) : (
                         <img src={p.proof_url} className="w-full max-h-64 object-cover" />
                       )}
                     </div>
                   )}
-                  {p.status === "submitted" && (
+                  {p.type !== "hub_post" && p.status === "submitted" && (
                     <div className="flex gap-3">
                       <button onClick={() => updateProofStatus(p.id, "accepted", p.user_name, p.session_id)}
                         className="flex-1 py-2.5 bg-green-500/20 border border-green-500/40 text-green-400 rounded-xl font-semibold">
@@ -824,17 +857,6 @@ export default function AdminDashboard() {
                         <p className="mt-4 text-zinc-500 text-xs">Posted by <span className="text-white">{r.created_by || "Admin"}</span></p>
                       </div>
                     </div>
-                    <button onClick={() => {
-                        if (r.reward_type === "voucher" && r.voucher_code) {
-                          navigator.clipboard.writeText(r.voucher_code)
-                          alert(`Voucher code copied: ${r.voucher_code}`)
-                        } else {
-                          alert("Reward ready to claim from the app")
-                        }
-                      }}
-                      className="whitespace-nowrap rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-zinc-950 hover:bg-cyan-300 transition">
-                      Claim Now
-                    </button>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button onClick={() => toggleRewardActive(r.id, r.active)}

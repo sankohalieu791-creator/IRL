@@ -84,6 +84,7 @@ export default function Hub() {
     let query = supabase
       .from("hub_posts")
       .select("*")
+      .eq("school", school)
       .order("created_at", { ascending: false })
       .limit(50)
     if (filter !== "All") query = query.eq("session_type", filter)
