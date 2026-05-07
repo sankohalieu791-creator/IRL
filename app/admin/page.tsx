@@ -335,12 +335,10 @@ export default function AdminDashboard() {
     loadPendingMembers()
   }
 
-  // Delete group function - handles cascade
   async function deleteGroup(id: string) {
     if (!confirm("Delete this group? This cannot be undone.")) return
     
     try {
-      // Delete all group members first
       const { error: membersError } = await supabase
         .from("group_members")
         .delete()
@@ -348,7 +346,6 @@ export default function AdminDashboard() {
       
       if (membersError) throw membersError
       
-      // Delete all group messages
       const { error: messagesError } = await supabase
         .from("group_messages")
         .delete()
@@ -356,7 +353,6 @@ export default function AdminDashboard() {
       
       if (messagesError) throw messagesError
       
-      // Finally delete the group
       const { error: groupError } = await supabase
         .from("groups")
         .delete()
@@ -396,7 +392,7 @@ export default function AdminDashboard() {
   if (activeGroupChat) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
-        <div className="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex items-center gap-4">
+        <div className="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex items-center gap-4 flex-shrink-0">
           <button onClick={() => setActiveGroupChat(null)}
             className="text-zinc-400 hover:text-white text-sm">← Back</button>
           <div>
@@ -431,7 +427,7 @@ export default function AdminDashboard() {
             </div>
           ))}
         </div>
-        <div className="border-t border-zinc-800 p-4 max-w-2xl mx-auto w-full">
+        <div className="border-t border-zinc-800 p-4 max-w-2xl mx-auto w-full flex-shrink-0">
           <div className="flex gap-3 items-center bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3">
             <label className="cursor-pointer text-zinc-400 hover:text-white flex-shrink-0">
               <span className="text-xl">{uploadingMedia ? "⏳" : "📎"}</span>
@@ -455,9 +451,9 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white">
+    <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
 
-      <div className="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
+      <div className="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex justify-between items-center flex-shrink-0">
         <div>
           <h1 className="text-xl font-bold text-cyan-400">Admin Dashboard</h1>
           <p className="text-zinc-500 text-sm">{SCHOOL}</p>
@@ -468,7 +464,7 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      <div className="bg-zinc-900 border-b border-zinc-800 px-6 flex gap-1 overflow-x-auto">
+      <div className="bg-zinc-900 border-b border-zinc-800 px-6 flex gap-1 overflow-x-auto flex-shrink-0">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`px-4 py-3.5 text-sm font-semibold transition-colors border-b-2 whitespace-nowrap ${
@@ -479,345 +475,347 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto p-6 space-y-6">
 
-        {tab === "proofs" && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold text-white">Proof Submissions</h2>
-            {proofs.length === 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No proofs submitted yet</div>
-            )}
-            {proofs.map(p => (
-              <div key={p.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <p className="font-bold text-white">{p.user_name}</p>
-                    <p className="text-zinc-500 text-sm">{p.session_title}</p>
-                  </div>
-                  <span className={`text-xs px-3 py-1 rounded-full font-semibold ${
-                    p.status === "accepted" ? "bg-green-500/20 text-green-400" :
-                    p.status === "declined" ? "bg-red-500/20 text-red-400" :
-                    "bg-yellow-500/20 text-yellow-400"
-                  }`}>{p.status}</span>
-                </div>
-                {p.proof_url && (
-                  <div className="mb-4 rounded-xl overflow-hidden">
-                    {p.proof_url.match(/\.(mp4|mov|avi)$/i) ? (
-                      <video src={p.proof_url} controls className="w-full max-h-64 object-cover" />
-                    ) : (
-                      <img src={p.proof_url} className="w-full max-h-64 object-cover" />
-                    )}
-                  </div>
-                )}
-                {p.status === "submitted" && (
-                  <div className="flex gap-3">
-                    <button onClick={() => updateProofStatus(p.id, "accepted", p.user_name, p.session_id)}
-                      className="flex-1 py-2.5 bg-green-500/20 border border-green-500/40 text-green-400 rounded-xl font-semibold">
-                      ✅ Accept
-                    </button>
-                    <button onClick={() => updateProofStatus(p.id, "declined", p.user_name, p.session_id)}
-                      className="flex-1 py-2.5 bg-red-500/20 border border-red-500/40 text-red-400 rounded-xl font-semibold">
-                      ❌ Decline
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {tab === "sessions" && (
-          <div className="space-y-4">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
-              <h2 className="text-lg font-bold text-white">Create Session</h2>
-              <input placeholder="Session title" value={newSession.title}
-                onChange={e => setNewSession(p => ({ ...p, title: e.target.value }))}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-              <div className="grid grid-cols-2 gap-3">
-                <select value={newSession.type} onChange={e => setNewSession(p => ({ ...p, type: e.target.value }))}
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400">
-                  <option>Quest</option><option>Challenge</option><option>Activity</option>
-                </select>
-                <select value={newSession.skill_type} onChange={e => setNewSession(p => ({ ...p, skill_type: e.target.value }))}
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400">
-                  <option>Open Skill</option><option>Competitive</option>
-                </select>
-                <input placeholder="Category (e.g. Sport)" value={newSession.category}
-                  onChange={e => setNewSession(p => ({ ...p, category: e.target.value }))}
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-                <input type="number" placeholder="LP points" value={newSession.points}
-                  onChange={e => setNewSession(p => ({ ...p, points: Number(e.target.value) }))}
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400" />
-              </div>
-              <input placeholder="Image URL (optional)" value={newSession.image}
-                onChange={e => setNewSession(p => ({ ...p, image: e.target.value }))}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-              {newSession.image && (
-                <div className="rounded-xl overflow-hidden h-32">
-                  <img src={newSession.image} className="w-full h-full object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }} />
-                </div>
+          {tab === "proofs" && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-white">Proof Submissions</h2>
+              {proofs.length === 0 && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No proofs submitted yet</div>
               )}
-              <button onClick={createSession}
-                className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
-                ⚡ Create Session
-              </button>
-            </div>
-            <h2 className="text-lg font-bold text-white">All Sessions</h2>
-            {sessions.length === 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No sessions yet</div>
-            )}
-            {sessions.map(s => (
-              <div key={s.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-                {s.image && <img src={s.image} className="w-full h-32 object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }} />}
-                <div className="p-5 flex justify-between items-center">
-                  <div>
-                    <p className="font-bold text-white">{s.title}</p>
-                    <p className="text-zinc-500 text-sm">{s.type} · {s.skill_type} · ⚡ {s.points} LP</p>
+              {proofs.map(p => (
+                <div key={p.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <p className="font-bold text-white">{p.user_name}</p>
+                      <p className="text-zinc-500 text-sm">{p.session_title}</p>
+                    </div>
+                    <span className={`text-xs px-3 py-1 rounded-full font-semibold ${
+                      p.status === "accepted" ? "bg-green-500/20 text-green-400" :
+                      p.status === "declined" ? "bg-red-500/20 text-red-400" :
+                      "bg-yellow-500/20 text-yellow-400"
+                    }`}>{p.status}</span>
                   </div>
-                  <button onClick={() => deleteSession(s.id)}
-                    className="text-red-400 text-sm border border-red-400/30 px-4 py-2 rounded-xl">Delete</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {tab === "students" && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold text-white">All Students</h2>
-            {students.length === 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No students yet</div>
-            )}
-            {students.map(s => (
-              <div key={s.user_name} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center font-bold text-white">
-                    {s.user_name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="font-bold text-white">{s.user_name}</p>
-                    <p className="text-zinc-500 text-sm">{s.school} · {s.sessions} sessions</p>
-                  </div>
-                </div>
-                <span className="text-cyan-400 font-bold text-lg">{s.points} LP</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {tab === "codes" && (
-          <div className="space-y-4">
-            {generatedCode && (
-              <div className="bg-cyan-400/10 border border-cyan-400/40 rounded-2xl p-6 text-center">
-                <p className="text-zinc-400 text-sm mb-2">New code generated — share this with the admin</p>
-                <p className="text-4xl font-black text-cyan-400 tracking-widest">{generatedCode}</p>
-                <p className="text-zinc-500 text-xs mt-2">They use this code + choose their own password on the login page</p>
-              </div>
-            )}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
-              <h2 className="text-lg font-bold text-white">Generate Admin Code</h2>
-              <p className="text-zinc-500 text-sm">The new admin uses this code on the login page and sets their own password.</p>
-              <input placeholder="Admin name" value={newCode.user_name}
-                onChange={e => setNewCode(p => ({ ...p, user_name: e.target.value }))}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-              <select value={newCode.role} onChange={e => setNewCode(p => ({ ...p, role: e.target.value }))}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400">
-                <option value="admin">Admin</option>
-                <option value="student">Student</option>
-              </select>
-              <button onClick={createCode}
-                className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
-                🔑 Generate Code
-              </button>
-            </div>
-            <h2 className="text-lg font-bold text-white">All Codes</h2>
-            {codes.length === 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No codes yet</div>
-            )}
-            {codes.map(c => (
-              <div key={c.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex justify-between items-center">
-                <div>
-                  <p className="font-mono font-bold text-cyan-400 text-lg">{c.code}</p>
-                  <p className="text-zinc-500 text-sm">{c.user_name} · {c.role}</p>
-                </div>
-                <span className={`text-sm px-3 py-1 rounded-full font-semibold ${
-                  c.used ? "bg-green-500/20 text-green-400" : "bg-zinc-700 text-zinc-400"
-                }`}>{c.used ? "Used" : "Unused"}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {tab === "groups" && (
-          <div className="space-y-4">
-            {pendingMembers.length > 0 && (
-              <>
-                <h2 className="text-lg font-bold text-yellow-400">⏳ Pending Requests</h2>
-                {pendingMembers.map(m => (
-                  <div key={m.id} className="bg-zinc-900 border border-yellow-500/30 rounded-2xl p-5">
-                    <p className="font-bold text-white mb-1">{m.user_name}</p>
-                    <p className="text-zinc-500 text-sm mb-4">wants to join a group</p>
+                  {p.proof_url && (
+                    <div className="mb-4 rounded-xl overflow-hidden">
+                      {p.proof_url.match(/\.(mp4|mov|avi)$/i) ? (
+                        <video src={p.proof_url} controls className="w-full max-h-64 object-cover" />
+                      ) : (
+                        <img src={p.proof_url} className="w-full max-h-64 object-cover" />
+                      )}
+                    </div>
+                  )}
+                  {p.status === "submitted" && (
                     <div className="flex gap-3">
-                      <button onClick={() => handleMemberRequest(m.id, "accepted")}
+                      <button onClick={() => updateProofStatus(p.id, "accepted", p.user_name, p.session_id)}
                         className="flex-1 py-2.5 bg-green-500/20 border border-green-500/40 text-green-400 rounded-xl font-semibold">
                         ✅ Accept
                       </button>
-                      <button onClick={() => handleMemberRequest(m.id, "declined")}
+                      <button onClick={() => updateProofStatus(p.id, "declined", p.user_name, p.session_id)}
                         className="flex-1 py-2.5 bg-red-500/20 border border-red-500/40 text-red-400 rounded-xl font-semibold">
                         ❌ Decline
                       </button>
                     </div>
-                  </div>
-                ))}
-              </>
-            )}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
-              <h2 className="text-lg font-bold text-white">Create Group</h2>
-              <input placeholder="Group name" value={newGroup.name}
-                onChange={e => setNewGroup(p => ({ ...p, name: e.target.value }))}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-              <input placeholder="Description (optional)" value={newGroup.description}
-                onChange={e => setNewGroup(p => ({ ...p, description: e.target.value }))}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-              <button onClick={createGroup}
-                className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
-                🏘 Create Group
-              </button>
-            </div>
-            <h2 className="text-lg font-bold text-white">All Groups</h2>
-            {groups.length === 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No groups yet</div>
-            )}
-            {groups.map(g => (
-              <div key={g.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <p className="font-bold text-white text-base">{g.name}</p>
-                    {g.description && <p className="text-zinc-500 text-sm">{g.description}</p>}
-                    <p className="text-zinc-600 text-xs mt-1">⚡ {g.total_lp || 0} LP</p>
-                  </div>
-                  <button onClick={() => deleteGroup(g.id)}
-                    className="text-red-400 text-sm border border-red-400/30 px-3 py-1.5 rounded-xl">
-                    🗑 Delete
-                  </button>
+                  )}
                 </div>
-                <button
-                  onClick={() => { setActiveGroupChat(g); loadGroupMessages(g.id) }}
-                  className="w-full py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm font-semibold text-zinc-300 hover:border-cyan-500 hover:text-white transition-colors">
-                  💬 Send Message to Group
+              ))}
+            </div>
+          )}
+
+          {tab === "sessions" && (
+            <div className="space-y-4">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
+                <h2 className="text-lg font-bold text-white">Create Session</h2>
+                <input placeholder="Session title" value={newSession.title}
+                  onChange={e => setNewSession(p => ({ ...p, title: e.target.value }))}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+                <div className="grid grid-cols-2 gap-3">
+                  <select value={newSession.type} onChange={e => setNewSession(p => ({ ...p, type: e.target.value }))}
+                    className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400">
+                    <option>Quest</option><option>Challenge</option><option>Activity</option>
+                  </select>
+                  <select value={newSession.skill_type} onChange={e => setNewSession(p => ({ ...p, skill_type: e.target.value }))}
+                    className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400">
+                    <option>Open Skill</option><option>Competitive</option>
+                  </select>
+                  <input placeholder="Category (e.g. Sport)" value={newSession.category}
+                    onChange={e => setNewSession(p => ({ ...p, category: e.target.value }))}
+                    className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+                  <input type="number" placeholder="LP points" value={newSession.points}
+                    onChange={e => setNewSession(p => ({ ...p, points: Number(e.target.value) }))}
+                    className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400" />
+                </div>
+                <input placeholder="Image URL (optional)" value={newSession.image}
+                  onChange={e => setNewSession(p => ({ ...p, image: e.target.value }))}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+                {newSession.image && (
+                  <div className="rounded-xl overflow-hidden h-32">
+                    <img src={newSession.image} className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }} />
+                  </div>
+                )}
+                <button onClick={createSession}
+                  className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
+                  ⚡ Create Session
                 </button>
               </div>
-            ))}
-          </div>
-        )}
-
-        {tab === "rewards" && (
-          <div className="space-y-4">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
-              <h2 className="text-lg font-bold text-white">Add New Reward</h2>
-              <p className="text-zinc-500 text-sm">Add real world or digital rewards from your org or business partners.</p>
-
-              <div className="grid grid-cols-2 gap-3">
-                <input placeholder="Business / Org name e.g. Nando's"
-                  value={newReward.business_name}
-                  onChange={e => setNewReward(p => ({ ...p, business_name: e.target.value }))}
-                  className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-
-                <input placeholder="Reward title e.g. Free Wings"
-                  value={newReward.title}
-                  onChange={e => setNewReward(p => ({ ...p, title: e.target.value }))}
-                  className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-
-                <input placeholder="Description e.g. Free wings when you spend £5"
-                  value={newReward.description}
-                  onChange={e => setNewReward(p => ({ ...p, description: e.target.value }))}
-                  className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-
-                <input type="number" placeholder="LP cost e.g. 3000"
-                  value={newReward.points_required}
-                  onChange={e => setNewReward(p => ({ ...p, points_required: Number(e.target.value) }))}
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400" />
-
-                <input placeholder="Emoji icon e.g. 🍗"
-                  value={newReward.icon}
-                  onChange={e => setNewReward(p => ({ ...p, icon: e.target.value }))}
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-
-                <select value={newReward.reward_type}
-                  onChange={e => setNewReward(p => ({ ...p, reward_type: e.target.value }))}
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400">
-                  <option value="physical">Physical — shown in store</option>
-                  <option value="digital">Digital — code or link</option>
-                  <option value="voucher">Voucher — printed ticket</option>
-                </select>
-
-                <input placeholder="Redemption info e.g. Show ticket at counter"
-                  value={newReward.redemption_info}
-                  onChange={e => setNewReward(p => ({ ...p, redemption_info: e.target.value }))}
-                  className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-              </div>
-
-              <button onClick={createReward}
-                className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
-                🎁 Add Reward
-              </button>
-            </div>
-
-            <h2 className="text-lg font-bold text-white">All Rewards</h2>
-            {rewards.length === 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">
-                No rewards added yet — add your first one above
-              </div>
-            )}
-            {rewards.map(r => (
-              <div key={r.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className="w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center text-2xl flex-shrink-0">
-                      {r.icon || "🎁"}
+              <h2 className="text-lg font-bold text-white">All Sessions</h2>
+              {sessions.length === 0 && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No sessions yet</div>
+              )}
+              {sessions.map(s => (
+                <div key={s.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                  {s.image && <img src={s.image} className="w-full h-32 object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }} />}
+                  <div className="p-5 flex justify-between items-center">
+                    <div>
+                      <p className="font-bold text-white">{s.title}</p>
+                      <p className="text-zinc-500 text-sm">{s.type} · {s.skill_type} · ⚡ {s.points} LP</p>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-zinc-400 text-xs font-bold uppercase tracking-wider mb-0.5">{r.business_name}</p>
-                      <p className="font-bold text-white text-sm">{r.title}</p>
-                      {r.description && <p className="text-zinc-500 text-xs mt-0.5">{r.description}</p>}
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <span className="text-cyan-400 text-xs font-bold">⚡ {r.points_required} LP</span>
-                        <span className="text-zinc-600 text-xs">·</span>
-                        <span className="text-zinc-500 text-xs capitalize">{r.reward_type}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                          r.active ? "bg-green-500/20 text-green-400" : "bg-zinc-700 text-zinc-500"
-                        }`}>{r.active ? "Active" : "Hidden"}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2 flex-shrink-0">
-                    <button onClick={() => toggleRewardActive(r.id, r.active)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border ${
-                        r.active
-                          ? "border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10"
-                          : "border-green-500/40 text-green-400 hover:bg-green-500/10"
-                      }`}>
-                      {r.active ? "Hide" : "Show"}
-                    </button>
-                    <button onClick={() => deleteReward(r.id)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-400/30 text-red-400 hover:bg-red-400/10">
-                      Delete
-                    </button>
+                    <button onClick={() => deleteSession(s.id)}
+                      className="text-red-400 text-sm border border-red-400/30 px-4 py-2 rounded-xl">Delete</button>
                   </div>
                 </div>
+              ))}
+            </div>
+          )}
+
+          {tab === "students" && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-white">All Students</h2>
+              {students.length === 0 && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No students yet</div>
+              )}
+              {students.map(s => (
+                <div key={s.user_name} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex justify-between items-center">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center font-bold text-white">
+                      {s.user_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-bold text-white">{s.user_name}</p>
+                      <p className="text-zinc-500 text-sm">{s.school} · {s.sessions} sessions</p>
+                    </div>
+                  </div>
+                  <span className="text-cyan-400 font-bold text-lg">{s.points} LP</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tab === "codes" && (
+            <div className="space-y-4">
+              {generatedCode && (
+                <div className="bg-cyan-400/10 border border-cyan-400/40 rounded-2xl p-6 text-center">
+                  <p className="text-zinc-400 text-sm mb-2">New code generated — share this with the admin</p>
+                  <p className="text-4xl font-black text-cyan-400 tracking-widest">{generatedCode}</p>
+                  <p className="text-zinc-500 text-xs mt-2">They use this code + choose their own password on the login page</p>
+                </div>
+              )}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
+                <h2 className="text-lg font-bold text-white">Generate Admin Code</h2>
+                <p className="text-zinc-500 text-sm">The new admin uses this code on the login page and sets their own password.</p>
+                <input placeholder="Admin name" value={newCode.user_name}
+                  onChange={e => setNewCode(p => ({ ...p, user_name: e.target.value }))}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+                <select value={newCode.role} onChange={e => setNewCode(p => ({ ...p, role: e.target.value }))}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400">
+                  <option value="admin">Admin</option>
+                  <option value="student">Student</option>
+                </select>
+                <button onClick={createCode}
+                  className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
+                  🔑 Generate Code
+                </button>
               </div>
-            ))}
-          </div>
-        )}
+              <h2 className="text-lg font-bold text-white">All Codes</h2>
+              {codes.length === 0 && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No codes yet</div>
+              )}
+              {codes.map(c => (
+                <div key={c.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex justify-between items-center">
+                  <div>
+                    <p className="font-mono font-bold text-cyan-400 text-lg">{c.code}</p>
+                    <p className="text-zinc-500 text-sm">{c.user_name} · {c.role}</p>
+                  </div>
+                  <span className={`text-sm px-3 py-1 rounded-full font-semibold ${
+                    c.used ? "bg-green-500/20 text-green-400" : "bg-zinc-700 text-zinc-400"
+                  }`}>{c.used ? "Used" : "Unused"}</span>
+                </div>
+              ))}
+            </div>
+          )}
 
-        {tab === "institutions" && (
-          <div className="space-y-4">
-            <InstitutionsTab school={SCHOOL} />
-          </div>
-        )}
+          {tab === "groups" && (
+            <div className="space-y-4">
+              {pendingMembers.length > 0 && (
+                <>
+                  <h2 className="text-lg font-bold text-yellow-400">⏳ Pending Requests</h2>
+                  {pendingMembers.map(m => (
+                    <div key={m.id} className="bg-zinc-900 border border-yellow-500/30 rounded-2xl p-5">
+                      <p className="font-bold text-white mb-1">{m.user_name}</p>
+                      <p className="text-zinc-500 text-sm mb-4">wants to join a group</p>
+                      <div className="flex gap-3">
+                        <button onClick={() => handleMemberRequest(m.id, "accepted")}
+                          className="flex-1 py-2.5 bg-green-500/20 border border-green-500/40 text-green-400 rounded-xl font-semibold">
+                          ✅ Accept
+                        </button>
+                        <button onClick={() => handleMemberRequest(m.id, "declined")}
+                          className="flex-1 py-2.5 bg-red-500/20 border border-red-500/40 text-red-400 rounded-xl font-semibold">
+                          ❌ Decline
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
+                <h2 className="text-lg font-bold text-white">Create Group</h2>
+                <input placeholder="Group name" value={newGroup.name}
+                  onChange={e => setNewGroup(p => ({ ...p, name: e.target.value }))}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+                <input placeholder="Description (optional)" value={newGroup.description}
+                  onChange={e => setNewGroup(p => ({ ...p, description: e.target.value }))}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+                <button onClick={createGroup}
+                  className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
+                  🏘 Create Group
+                </button>
+              </div>
+              <h2 className="text-lg font-bold text-white">All Groups</h2>
+              {groups.length === 0 && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No groups yet</div>
+              )}
+              {groups.map(g => (
+                <div key={g.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <p className="font-bold text-white text-base">{g.name}</p>
+                      {g.description && <p className="text-zinc-500 text-sm">{g.description}</p>}
+                      <p className="text-zinc-600 text-xs mt-1">⚡ {g.total_lp || 0} LP</p>
+                    </div>
+                    <button onClick={() => deleteGroup(g.id)}
+                      className="text-red-400 text-sm border border-red-400/30 px-3 py-1.5 rounded-xl">
+                      🗑 Delete
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => { setActiveGroupChat(g); loadGroupMessages(g.id) }}
+                    className="w-full py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm font-semibold text-zinc-300 hover:border-cyan-500 hover:text-white transition-colors">
+                    💬 Send Message to Group
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
+          {tab === "rewards" && (
+            <div className="space-y-4">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
+                <h2 className="text-lg font-bold text-white">Add New Reward</h2>
+                <p className="text-zinc-500 text-sm">Add real world or digital rewards from your org or business partners.</p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <input placeholder="Business / Org name e.g. Nando's"
+                    value={newReward.business_name}
+                    onChange={e => setNewReward(p => ({ ...p, business_name: e.target.value }))}
+                    className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+
+                  <input placeholder="Reward title e.g. Free Wings"
+                    value={newReward.title}
+                    onChange={e => setNewReward(p => ({ ...p, title: e.target.value }))}
+                    className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+
+                  <input placeholder="Description e.g. Free wings when you spend £5"
+                    value={newReward.description}
+                    onChange={e => setNewReward(p => ({ ...p, description: e.target.value }))}
+                    className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+
+                  <input type="number" placeholder="LP cost e.g. 3000"
+                    value={newReward.points_required}
+                    onChange={e => setNewReward(p => ({ ...p, points_required: Number(e.target.value) }))}
+                    className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400" />
+
+                  <input placeholder="Emoji icon e.g. 🍗"
+                    value={newReward.icon}
+                    onChange={e => setNewReward(p => ({ ...p, icon: e.target.value }))}
+                    className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+
+                  <select value={newReward.reward_type}
+                    onChange={e => setNewReward(p => ({ ...p, reward_type: e.target.value }))}
+                    className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-400">
+                    <option value="physical">Physical — shown in store</option>
+                    <option value="digital">Digital — code or link</option>
+                    <option value="voucher">Voucher — printed ticket</option>
+                  </select>
+
+                  <input placeholder="Redemption info e.g. Show ticket at counter"
+                    value={newReward.redemption_info}
+                    onChange={e => setNewReward(p => ({ ...p, redemption_info: e.target.value }))}
+                    className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+                </div>
+
+                <button onClick={createReward}
+                  className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
+                  🎁 Add Reward
+                </button>
+              </div>
+
+              <h2 className="text-lg font-bold text-white">All Rewards</h2>
+              {rewards.length === 0 && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">
+                  No rewards added yet — add your first one above
+                </div>
+              )}
+              {rewards.map(r => (
+                <div key={r.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div className="w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center text-2xl flex-shrink-0">
+                        {r.icon || "🎁"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-zinc-400 text-xs font-bold uppercase tracking-wider mb-0.5">{r.business_name}</p>
+                        <p className="font-bold text-white text-sm">{r.title}</p>
+                        {r.description && <p className="text-zinc-500 text-xs mt-0.5">{r.description}</p>}
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="text-cyan-400 text-xs font-bold">⚡ {r.points_required} LP</span>
+                          <span className="text-zinc-600 text-xs">·</span>
+                          <span className="text-zinc-500 text-xs capitalize">{r.reward_type}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                            r.active ? "bg-green-500/20 text-green-400" : "bg-zinc-700 text-zinc-500"
+                          }`}>{r.active ? "Active" : "Hidden"}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 flex-shrink-0">
+                      <button onClick={() => toggleRewardActive(r.id, r.active)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border ${
+                          r.active
+                            ? "border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10"
+                            : "border-green-500/40 text-green-400 hover:bg-green-500/10"
+                        }`}>
+                        {r.active ? "Hide" : "Show"}
+                      </button>
+                      <button onClick={() => deleteReward(r.id)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-400/30 text-red-400 hover:bg-red-400/10">
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tab === "institutions" && (
+            <div className="space-y-4">
+              <InstitutionsTab school={SCHOOL} />
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   )
