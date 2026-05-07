@@ -29,6 +29,8 @@ export default function LoginPage() {
 
   const filtered = institutions.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
 
+
+
   async function handleStudentLogin() {
     if (!username || !password) { setError("Please fill in all fields"); return }
     setLoading(true); setError("")

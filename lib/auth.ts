@@ -2,7 +2,7 @@ import { supabase } from "./supabase"
 import bcrypt from "bcryptjs"
 
 export async function signUp(code: string, password: string, username?: string, institution?: string) {
-  
+
   // NEW FLOW — institution based signup (no invite code)
   if (username && institution) {
     // Check if username already exists
@@ -142,24 +142,48 @@ export function saveToStorage(userName: string, school: string, role: string) {
     sessionStorage.setItem("irl_school", school)
     sessionStorage.setItem("irl_role", role)
   } catch {}
+
+  const expires = new Date()
+  expires.setFullYear(expires.getFullYear() + 2)
+  const cookieOptions = `expires=${expires.toUTCString()}; path=/; SameSite=Lax`
+  document.cookie = `irl_user=${encodeURIComponent(userName)}; ${cookieOptions}`
+  document.cookie = `irl_school=${encodeURIComponent(school)}; ${cookieOptions}`
+  document.cookie = `irl_role=${encodeURIComponent(role)}; ${cookieOptions}`
 }
 
 export function getUser(): string | null {
   if (typeof window === "undefined") return null
   return localStorage.getItem("irl_user")
     || sessionStorage.getItem("irl_user")
+    || getCookieValue("irl_user")
 }
 
 export function getSchool(): string | null {
   if (typeof window === "undefined") return null
   return localStorage.getItem("irl_school")
     || sessionStorage.getItem("irl_school")
+    || getCookieValue("irl_school")
 }
 
 export function getRole(): string | null {
   if (typeof window === "undefined") return null
   return localStorage.getItem("irl_role")
     || sessionStorage.getItem("irl_role")
+    || getCookieValue("irl_role")
+}
+
+function getCookieValue(name: string): string | null {
+  if (typeof document === "undefined") return null
+  try {
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'))
+    return match ? decodeURIComponent(match[2]) : null
+  } catch {
+    return null
+  }
+}
+
+export function isAdmin(): boolean {
+  return getRole() === "admin"
 }
 
 export function logout() {
@@ -170,8 +194,7 @@ export function logout() {
   sessionStorage.removeItem("irl_user")
   sessionStorage.removeItem("irl_school")
   sessionStorage.removeItem("irl_role")
-}
-
-export function isAdmin(): boolean {
-  return getRole() === "admin"
+  document.cookie = "irl_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
+  document.cookie = "irl_school=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
+  document.cookie = "irl_role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
 }

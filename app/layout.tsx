@@ -38,9 +38,9 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="IRL" />
         <link rel="apple-touch-icon" href="/irl-icon.png" />
       </head>
-      <body className="bg-black min-h-screen">
+      <body className="bg-black min-h-screen overflow-hidden">
         <AuthGuard>{children}</AuthGuard>
-        {process.env.VERCEL && <Analytics />}
+        <Analytics />
       </body>
     </html>
   )
