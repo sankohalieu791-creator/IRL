@@ -10,6 +10,11 @@ type Reward = {
   points_required: number
   description?: string
   icon?: string
+  business_name?: string
+  image_url?: string
+  voucher_code?: string
+  reward_type?: string
+  created_by?: string
 }
 
 export default function Rewards() {
@@ -535,83 +540,92 @@ export default function Rewards() {
           </div>
           <p className="text-zinc-700 text-xs text-center mb-4">Spend your LinkPoints to claim these</p>
 
-          <div className="space-y-3">
-            {rewards.map((reward) => {
-              const isClaimed = claimed.includes(reward.id)
-              const unlocked = points >= reward.points_required
-              const isClaiming = claiming === reward.id
-              const lpAway = reward.points_required - points
+          <div className="space-y-4">
+            {rewards.length === 0 && !loading ? (
+              <div className="text-center py-16">
+                <p className="text-zinc-400 text-sm">No LP rewards added yet.</p>
+                <p className="text-zinc-600 text-xs mt-2">Your admin will add these soon.</p>
+              </div>
+            ) : (
+              rewards.map((reward) => {
+                const isClaimed = claimed.includes(reward.id)
+                const unlocked = points >= reward.points_required
+                const isClaiming = claiming === reward.id
+                const lpAway = Math.max(reward.points_required - points, 0)
 
-              return (
-                <div key={reward.id} style={{
-                  borderRadius: 16, padding: "14px",
-                  background: isClaimed
-                    ? "rgba(74,222,128,0.06)"
-                    : unlocked
-                    ? "rgba(0,212,255,0.04)"
-                    : "rgba(255,255,255,0.02)",
-                  border: `1px solid ${isClaimed ? "rgba(74,222,128,0.3)" : unlocked ? "rgba(0,212,255,0.2)" : "rgba(255,255,255,0.06)"}`,
-                  opacity: !unlocked && !isClaimed ? 0.5 : 1,
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{
-                      width: 48, height: 48, borderRadius: 12,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 22, flexShrink: 0,
-                      background: isClaimed ? "rgba(74,222,128,0.12)" : unlocked ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
-                      border: `1px solid ${isClaimed ? "rgba(74,222,128,0.25)" : unlocked ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.05)"}`,
-                    }}>
-                      {isClaimed ? "✅" : !unlocked ? "🔒" : (reward.icon || "🏅")}
+                return (
+                  <div key={reward.id} className="overflow-hidden rounded-[32px] border border-zinc-800 shadow-[0_28px_120px_rgba(0,0,0,0.35)] bg-zinc-950">
+                    <div className="relative h-56">
+                      {reward.image_url ? (
+                        <img src={reward.image_url} alt={reward.title}
+                          className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="h-full w-full bg-gradient-to-br from-purple-900 via-zinc-900 to-cyan-900" />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/95 via-zinc-950/40 to-transparent" />
+                      <div className="absolute top-4 left-4 rounded-full bg-black/50 px-3 py-2 text-xs font-semibold text-white backdrop-blur-sm">
+                        {reward.business_name || "Local Reward"}
+                      </div>
+                      <div className="absolute top-4 right-4 rounded-full bg-white/10 border border-white/10 px-3 py-2 text-xs font-semibold text-white backdrop-blur-sm">
+                        {reward.points_required} LP
+                      </div>
+                      {reward.reward_type === "voucher" && reward.voucher_code && (
+                        <div className="absolute left-4 bottom-20 rounded-2xl bg-white/10 border border-white/10 px-3 py-2 text-[11px] font-semibold text-cyan-200 backdrop-blur-sm">
+                          Voucher code: {reward.voucher_code}
+                        </div>
+                      )}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{
-                        color: isClaimed ? "#4ade80" : unlocked ? "white" : "rgba(255,255,255,0.35)",
-                        fontWeight: 700, fontSize: 13, marginBottom: 2
-                      }}>{reward.title}</p>
+                    <div className="p-5 pb-5">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <p className="text-zinc-400 text-xs uppercase tracking-[0.24em] font-semibold">
+                          {reward.reward_type ? reward.reward_type.toUpperCase() : "REWARD"}
+                        </p>
+                        {isClaimed ? (
+                          <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-bold text-emerald-300 border border-emerald-500/20">
+                            CLAIMED
+                          </span>
+                        ) : unlocked ? (
+                          <span className="rounded-full bg-cyan-400/10 px-3 py-1 text-[11px] font-bold text-cyan-300 border border-cyan-400/20">
+                            READY
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-zinc-800/80 px-3 py-1 text-[11px] font-bold text-zinc-300 border border-zinc-700/60">
+                            {lpAway} LP AWAY
+                          </span>
+                        )}
+                      </div>
+                      <h2 className="text-xl font-bold text-white leading-tight mb-2">
+                        {reward.title}
+                      </h2>
                       {reward.description && (
-                        <p style={{ color: "rgba(255,255,255,0.25)", fontSize: 11, lineHeight: 1.4, marginBottom: 4 }}>
+                        <p className="text-zinc-300 text-sm leading-6 mb-4">
                           {reward.description}
                         </p>
                       )}
-                      <p style={{
-                        color: isClaimed ? "rgba(74,222,128,0.5)" : unlocked ? "rgba(0,212,255,0.6)" : "rgba(255,255,255,0.2)",
-                        fontSize: 11, fontWeight: 700
-                      }}>⚡ {reward.points_required} LP</p>
-                    </div>
-                    <div style={{ flexShrink: 0, textAlign: "center" }}>
-                      {isClaimed ? (
-                        <p style={{ color: "#4ade80", fontSize: 10, fontWeight: 800 }}>CLAIMED<br />✓</p>
-                      ) : unlocked ? (
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <button
                           onClick={() => claimReward(reward.id, reward.points_required)}
-                          disabled={!!isClaiming}
-                          style={{
-                            padding: "8px 12px",
-                            background: "linear-gradient(135deg, #B400FF, #00D4FF)",
-                            border: "none", borderRadius: 10,
-                            color: "white", fontWeight: 800,
-                            fontSize: 11, cursor: "pointer",
-                            boxShadow: "0 4px 14px rgba(180,0,255,0.35)"
-                          }}
+                          disabled={!unlocked || isClaiming || isClaimed}
+                          className={`w-full sm:w-auto rounded-full px-6 py-3 text-sm font-bold transition ${
+                            isClaimed
+                              ? "bg-zinc-800 text-zinc-400 cursor-default"
+                              : unlocked
+                                ? "bg-gradient-to-r from-purple-500 to-cyan-400 text-zinc-950 shadow-[0_16px_40px_rgba(180,0,255,0.3)] hover:opacity-95"
+                                : "bg-white/5 text-zinc-400 cursor-not-allowed"
+                          }`}
                         >
-                          {isClaiming ? "..." : "CLAIM"}
+                          {isClaiming ? "Claiming..." : isClaimed ? "Already claimed" : "Claim Now"}
                         </button>
-                      ) : (
-                        <p style={{ color: "rgba(255,255,255,0.2)", fontSize: 10, lineHeight: 1.4 }}>
-                          {lpAway} LP<br />away
-                        </p>
-                      )}
+                        <div className="flex items-center gap-2 text-xs text-zinc-400">
+                          <span className="rounded-full bg-white/5 px-2 py-1">{reward.business_name || "IRL Shop"}</span>
+                          <span className="text-zinc-500">•</span>
+                          <span>{reward.created_by ? `Posted by ${reward.created_by}` : "Posted by admin"}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
-
-            {rewards.length === 0 && !loading && (
-              <div style={{ textAlign: "center", padding: "32px 0" }}>
-                <p style={{ color: "rgba(255,255,255,0.2)", fontSize: 13 }}>No LP rewards added yet.</p>
-                <p style={{ color: "rgba(255,255,255,0.1)", fontSize: 11, marginTop: 4 }}>Your admin will add these soon.</p>
-              </div>
+                )
+              })
             )}
           </div>
         </div>
