@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { getUser, getSchool, logout } from "@/lib/auth"
 import InstitutionsTab from "@/components/InstitutionsTab"
 
-type Tab = "proofs" | "sessions" | "students" | "codes" | "groups" | "institutions" | "rewards"
+type Tab = "proofs" | "sessions" | "members" | "codes" | "groups" | "institutions" | "rewards"
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -23,7 +23,7 @@ export default function AdminDashboard() {
   const [newCode, setNewCode] = useState({ user_name: "", role: "admin" })
   const [generatedCode, setGeneratedCode] = useState("")
   const [proofs, setProofs] = useState<any[]>([])
-  const [students, setStudents] = useState<any[]>([])
+  const [members, setMembers] = useState<any[]>([])
   const [groups, setGroups] = useState<any[]>([])
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
   const [newGroup, setNewGroup] = useState({ name: "", description: "" })
@@ -42,6 +42,8 @@ export default function AdminDashboard() {
     reward_type: "physical",
     redemption_info: "",
     business_name: "",
+    image_url: "",
+    voucher_code: "",
     active: true
   })
 
@@ -59,7 +61,7 @@ export default function AdminDashboard() {
       if (tab === "sessions") await loadSessions()
       if (tab === "codes") await loadCodes()
       if (tab === "proofs") await loadProofs()
-      if (tab === "students") await loadStudents()
+      if (tab === "members") await loadMembers()
       if (tab === "groups") { await loadGroups(); await loadPendingMembers() }
       if (tab === "rewards") await loadRewards()
     }
@@ -109,7 +111,7 @@ export default function AdminDashboard() {
     setProofs(filtered)
   }
 
-  async function loadStudents() {
+  async function loadMembers() {
     const { data: users } = await supabase
       .from("users").select("user_name, school").eq("role", "student")
     if (!users) return
@@ -123,7 +125,7 @@ export default function AdminDashboard() {
       })
     )
     withStats.sort((a, b) => b.points - a.points)
-    setStudents(withStats)
+    setMembers(withStats)
   }
 
   async function loadGroups() {
@@ -162,6 +164,8 @@ export default function AdminDashboard() {
       reward_type: newReward.reward_type,
       redemption_info: newReward.redemption_info,
       business_name: newReward.business_name,
+      image_url: newReward.image_url,
+      voucher_code: newReward.voucher_code,
       active: true,
       created_by: ADMIN
     })
@@ -170,7 +174,7 @@ export default function AdminDashboard() {
 
     setNewReward({
       title: "", description: "", points_required: 500, icon: "",
-      reward_type: "physical", redemption_info: "", business_name: "", active: true
+      reward_type: "physical", redemption_info: "", business_name: "", image_url: "", voucher_code: "", active: true
     })
     loadRewards()
     alert("Reward created!")
@@ -380,7 +384,7 @@ export default function AdminDashboard() {
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: "proofs", label: "Proofs", icon: "📎" },
     { key: "sessions", label: "Sessions", icon: "⚡" },
-    { key: "students", label: "Students", icon: "👥" },
+    { key: "members", label: "Members", icon: "👥" },
     { key: "groups", label: "Groups", icon: "🏘" },
     { key: "rewards", label: "Rewards", icon: "🎁" },
     ...(isSuperAdmin ? [
@@ -581,13 +585,13 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {tab === "students" && (
+          {tab === "members" && (
             <div className="space-y-4">
-              <h2 className="text-lg font-bold text-white">All Students</h2>
-              {students.length === 0 && (
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No students yet</div>
+              <h2 className="text-lg font-bold text-white">All Members</h2>
+              {members.length === 0 && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No members yet</div>
               )}
-              {students.map(s => (
+              {members.map(s => (
                 <div key={s.user_name} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex justify-between items-center">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center font-bold text-white">
@@ -750,10 +754,22 @@ export default function AdminDashboard() {
                     <option value="voucher">Voucher — printed ticket</option>
                   </select>
 
+                    <input placeholder="Image URL for reward (optional)"
+                    value={newReward.image_url}
+                    onChange={e => setNewReward(p => ({ ...p, image_url: e.target.value }))}
+                    className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+
+                  {newReward.reward_type === "voucher" && (
+                    <input placeholder="Voucher code"
+                      value={newReward.voucher_code}
+                      onChange={e => setNewReward(p => ({ ...p, voucher_code: e.target.value }))}
+                      className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+                  )}
+
                   <input placeholder="Redemption info e.g. Show ticket at counter"
                     value={newReward.redemption_info}
                     onChange={e => setNewReward(p => ({ ...p, redemption_info: e.target.value }))}
-                    className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+                    className="col-span-2 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
                 </div>
 
                 <button onClick={createReward}
@@ -769,40 +785,70 @@ export default function AdminDashboard() {
                 </div>
               )}
               {rewards.map(r => (
-                <div key={r.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-                  <div className="flex items-start justify-between gap-3">
+                <div key={r.id} className="bg-zinc-950 border border-zinc-800 rounded-3xl p-5 shadow-xl shadow-black/20 transition hover:-translate-y-0.5">
+                  {r.image_url && (
+                    <div className="mb-4 overflow-hidden rounded-3xl border border-zinc-800">
+                      <img src={r.image_url} alt={r.title} className="w-full h-56 object-cover" />
+                    </div>
+                  )}
+                  <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <div className="w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center text-2xl flex-shrink-0">
+                      <div className="w-14 h-14 rounded-3xl bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-3xl flex-shrink-0">
                         {r.icon || "🎁"}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-zinc-400 text-xs font-bold uppercase tracking-wider mb-0.5">{r.business_name}</p>
-                        <p className="font-bold text-white text-sm">{r.title}</p>
-                        {r.description && <p className="text-zinc-500 text-xs mt-0.5">{r.description}</p>}
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-cyan-400 text-xs font-bold">⚡ {r.points_required} LP</span>
-                          <span className="text-zinc-600 text-xs">·</span>
-                          <span className="text-zinc-500 text-xs capitalize">{r.reward_type}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                            r.active ? "bg-green-500/20 text-green-400" : "bg-zinc-700 text-zinc-500"
-                          }`}>{r.active ? "Active" : "Hidden"}</span>
+                        <p className="text-zinc-400 text-[11px] font-bold uppercase tracking-[0.3em] mb-1">{r.business_name}</p>
+                        <div className="flex flex-col gap-1">
+                          <p className="font-bold text-white text-lg">{r.title}</p>
+                          {r.description && <p className="text-zinc-300 text-sm leading-relaxed">{r.description}</p>}
                         </div>
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          <span className="text-cyan-300 text-xs font-semibold">⚡ {r.points_required} LP</span>
+                          <span className="text-zinc-600 text-xs">·</span>
+                          <span className="text-zinc-400 text-xs capitalize">{r.reward_type}</span>
+                          <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                            r.active ? "bg-green-500/15 text-green-300 border border-green-500/20" : "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                          }`}>
+                            {r.active ? "Active" : "Hidden"}
+                          </span>
+                        </div>
+                        {r.reward_type === "voucher" && r.voucher_code && (
+                          <div className="mt-3 rounded-2xl bg-zinc-900 border border-zinc-800 px-4 py-3 text-sm text-zinc-300">
+                            <p className="font-semibold text-white mb-1">Voucher code</p>
+                            <p className="font-mono text-sm tracking-[0.15em]">{r.voucher_code}</p>
+                          </div>
+                        )}
+                        {r.redemption_info && (
+                          <p className="mt-3 text-zinc-400 text-sm">{r.redemption_info}</p>
+                        )}
+                        <p className="mt-4 text-zinc-500 text-xs">Posted by <span className="text-white">{r.created_by || "Admin"}</span></p>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2 flex-shrink-0">
-                      <button onClick={() => toggleRewardActive(r.id, r.active)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border ${
-                          r.active
-                            ? "border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10"
-                            : "border-green-500/40 text-green-400 hover:bg-green-500/10"
-                        }`}>
-                        {r.active ? "Hide" : "Show"}
-                      </button>
-                      <button onClick={() => deleteReward(r.id)}
-                        className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-400/30 text-red-400 hover:bg-red-400/10">
-                        Delete
-                      </button>
-                    </div>
+                    <button onClick={() => {
+                        if (r.reward_type === "voucher" && r.voucher_code) {
+                          navigator.clipboard.writeText(r.voucher_code)
+                          alert(`Voucher code copied: ${r.voucher_code}`)
+                        } else {
+                          alert("Reward ready to claim from the app")
+                        }
+                      }}
+                      className="whitespace-nowrap rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-zinc-950 hover:bg-cyan-300 transition">
+                      Claim Now
+                    </button>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button onClick={() => toggleRewardActive(r.id, r.active)}
+                      className={`px-3 py-2 rounded-2xl text-xs font-semibold border ${
+                        r.active
+                          ? "border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/10"
+                          : "border-green-500/40 text-green-300 hover:bg-green-500/10"
+                      }`}>
+                      {r.active ? "Hide" : "Show"}
+                    </button>
+                    <button onClick={() => deleteReward(r.id)}
+                      className="px-3 py-2 rounded-2xl text-xs font-semibold border border-red-400/30 text-red-400 hover:bg-red-400/10">
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))}
