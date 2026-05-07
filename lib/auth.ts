@@ -99,9 +99,7 @@ export async function signUp(code: string, password: string, username?: string, 
   return { success: true, role: invite.role }
 }
 
-// ✅ UPDATED LOGIN FUNCTION (fix admin login bug)
 export async function login(codeOrUsername: string, password: string) {
-  // First try finding by invite code
   let user: any = null
 
   const { data: byCode } = await supabase
@@ -113,7 +111,6 @@ export async function login(codeOrUsername: string, password: string) {
   if (byCode) {
     user = byCode
   } else {
-    // Try finding by username directly (for admins who already signed up)
     const { data: byUsername } = await supabase
       .from("users")
       .select("*")
@@ -153,7 +150,6 @@ function saveToStorage(userName: string, school: string, role: string) {
   document.cookie = `irl_school=${encodeURIComponent(school)}; ${cookieOptions}`
   document.cookie = `irl_role=${encodeURIComponent(role)}; ${cookieOptions}`
 }
-
 
 export function getUser(): string | null {
   if (typeof window === "undefined") return null

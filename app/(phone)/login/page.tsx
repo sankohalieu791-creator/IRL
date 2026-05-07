@@ -79,12 +79,10 @@ export default function LoginPage() {
     if (!adminCode || !password) { setError("Please fill in all fields"); return }
     setLoading(true); setError("")
 
-    // First check if admin already exists with this code
     const { data: existingUser } = await supabase.from("users")
       .select("*").eq("code", adminCode.toUpperCase()).eq("role", "admin").maybeSingle()
 
     if (existingUser) {
-      // Admin exists — compare password
       const match = await bcrypt.compare(password, existingUser.password)
       if (!match) { setError("Incorrect password"); setLoading(false); return }
       saveToStorage(existingUser.user_name, existingUser.school, existingUser.role)
@@ -93,7 +91,6 @@ export default function LoginPage() {
       return
     }
 
-    // Admin doesn't exist yet — try to sign up with invite code
     const { data: invite } = await supabase.from("invite_codes")
       .select("*").eq("code", adminCode.toUpperCase()).eq("used", false).maybeSingle()
 
@@ -103,7 +100,6 @@ export default function LoginPage() {
       return
     }
 
-    // Create the admin account
     const hashed = await bcrypt.hash(password, 10)
     const { error: err } = await supabase.from("users").insert({
       user_name: invite.user_name, school: invite.school,
