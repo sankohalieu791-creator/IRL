@@ -142,60 +142,24 @@ export function saveToStorage(userName: string, school: string, role: string) {
     sessionStorage.setItem("irl_school", school)
     sessionStorage.setItem("irl_role", role)
   } catch {}
-
-  try {
-    const expires = new Date()
-    expires.setFullYear(expires.getFullYear() + 2)
-    const domain = window.location.hostname === "localhost" ? "" : "; domain=.joinirl.co.uk"
-    const cookieOptions = `expires=${expires.toUTCString()}; path=/${domain}; SameSite=Lax; Secure`
-    document.cookie = `irl_user=${userName}; ${cookieOptions}`
-    document.cookie = `irl_school=${school}; ${cookieOptions}`
-    document.cookie = `irl_role=${role}; ${cookieOptions}`
-  } catch (err) {
-    console.error("Failed to set cookies:", err)
-  }
 }
 
 export function getUser(): string | null {
   if (typeof window === "undefined") return null
   return localStorage.getItem("irl_user")
     || sessionStorage.getItem("irl_user")
-    || getCookieValue("irl_user")
 }
 
 export function getSchool(): string | null {
   if (typeof window === "undefined") return null
   return localStorage.getItem("irl_school")
     || sessionStorage.getItem("irl_school")
-    || getCookieValue("irl_school")
 }
 
 export function getRole(): string | null {
   if (typeof window === "undefined") return null
   return localStorage.getItem("irl_role")
     || sessionStorage.getItem("irl_role")
-    || getCookieValue("irl_role")
-}
-
-function getCookieValue(name: string): string | null {
-  if (typeof document === "undefined") return null
-  try {
-    const cookies = document.cookie.split("; ")
-    for (const cookie of cookies) {
-      const [key, value] = cookie.split("=")
-      if (key === name && value) {
-        return value
-      }
-    }
-    return null
-  } catch (err) {
-    console.error(`Failed to read cookie ${name}:`, err)
-    return null
-  }
-}
-
-export function isAdmin(): boolean {
-  return getRole() === "admin"
 }
 
 export function logout() {
@@ -206,12 +170,8 @@ export function logout() {
   sessionStorage.removeItem("irl_user")
   sessionStorage.removeItem("irl_school")
   sessionStorage.removeItem("irl_role")
-  try {
-    const domain = window.location.hostname === "localhost" ? "" : "; domain=.joinirl.co.uk"
-    document.cookie = `irl_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${domain}`
-    document.cookie = `irl_school=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${domain}`
-    document.cookie = `irl_role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/${domain}`
-  } catch (err) {
-    console.error("Failed to clear cookies:", err)
-  }
+}
+
+export function isAdmin(): boolean {
+  return getRole() === "admin"
 }
