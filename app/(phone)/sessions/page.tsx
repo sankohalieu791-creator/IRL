@@ -133,7 +133,7 @@ function SessionsContent() {
       const { data: urlData } = supabase.storage.from("proof").getPublicUrl(fileName)
       const proofUrl = urlData.publicUrl
 
-      if (shareType === "hub") {
+      if (shareType === "hub" || shareType === "private") {
         const session = sessions.find(s => s.id === sessionId)
         await supabase.from("session_attempts")
           .update({ proof_url: proofUrl, status: "accepted" })
@@ -163,11 +163,7 @@ function SessionsContent() {
         loadTicker()
         alert(`🔥 Posted to Hub! +${session?.points} LP awarded!`)
       } else {
-        await supabase.from("session_attempts")
-          .update({ proof_url: proofUrl, status: "submitted" })
-          .eq("user_name", user).eq("session_id", sessionId)
-        setAttempts(prev => ({ ...prev, [sessionId]: { ...prev[sessionId], status: "submitted" } }))
-        alert("Proof submitted! Your institution will review it.")
+        alert("Please choose how to share your proof.")
       }
       setActiveUpload(null)
       setShareChoice(prev => ({ ...prev, [sessionId]: null }))
@@ -348,7 +344,7 @@ function SessionsContent() {
                             >
                               <p className="text-lg mb-1">🔒</p>
                               <p className="text-white text-xs font-bold">Share Privately</p>
-                              <p className="text-zinc-500 text-[10px] mt-0.5">Admin reviews</p>
+                              <p className="text-zinc-500 text-[10px] mt-0.5">Visible only to your institution</p>
                             </button>
                           </div>
                         </>
@@ -362,7 +358,7 @@ function SessionsContent() {
                           }`}>
                             {currentChoice === "hub"
                               ? "🌍 Sharing to Hub — LP awarded instantly"
-                              : "🔒 Sharing privately — admin will review"}
+                              : "🔒 Sharing privately — visible only to your institution"}
                           </div>
                           <label className="block w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl text-sm font-bold text-center cursor-pointer text-white">
                             {uploading ? "Uploading..." : "📷 Choose Photo or Video"}

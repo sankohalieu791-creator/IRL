@@ -15,6 +15,7 @@ type Reward = {
   voucher_code?: string
   reward_type?: string
   created_by?: string
+  active?: boolean
 }
 
 export default function Rewards() {
@@ -48,7 +49,7 @@ export default function Rewards() {
 
     const { data: rewardsData } = await supabase
       .from("rewards").select("*").order("points_required", { ascending: true }).limit(25)
-    if (rewardsData) setRewards(rewardsData)
+    if (rewardsData) setRewards(rewardsData.filter((r) => r.active !== false))
 
     const { data: claimedData } = await supabase
       .from("user_rewards").select("reward_id").eq("user_name", user)
@@ -59,10 +60,19 @@ export default function Rewards() {
 
   async function claimReward(rewardId: string, cost: number) {
     setClaiming(rewardId)
+    const alreadyClaimed = claimed.includes(rewardId)
+    if (alreadyClaimed) { setClaiming(null); return }
+
     const { data: userData } = await supabase
       .from("leaderboard").select("points").eq("user_name", user)
       .order("points", { ascending: false }).limit(1).maybeSingle()
     if (!userData) { setClaiming(null); return }
+    if (userData.points < cost) {
+      alert("Not enough LP to claim this reward.")
+      setClaiming(null)
+      return
+    }
+
     await supabase.from("leaderboard").update({ points: userData.points - cost }).eq("user_name", user)
     await supabase.from("user_rewards").insert({ user_name: user, reward_id: rewardId })
     await loadData()
@@ -116,73 +126,6 @@ export default function Rewards() {
     },
   ]
 
-  // Recognition awards — admin awards these
-  const recognitionAwards = [
-    {
-      id: "player-of-week",
-      title: "Player of the Week",
-      description: "Awarded by your institution to the standout student of the week.",
-      icon: "🏆",
-      color: "#FFD700",
-      glow: "rgba(255,215,0,0.3)",
-    },
-    {
-      id: "best-sport-person",
-      title: "Best Sport Person",
-      description: "Recognised for outstanding sporting achievement at your institution.",
-      icon: "🥇",
-      color: "#FFD700",
-      glow: "rgba(255,215,0,0.3)",
-    },
-    {
-      id: "most-improved",
-      title: "Most Improved",
-      description: "Biggest improvement in activity and sessions over the past month.",
-      icon: "📈",
-      color: "#00D4FF",
-      glow: "rgba(0,212,255,0.3)",
-    },
-    {
-      id: "community-champion",
-      title: "Community Champion",
-      description: "Recognised for inspiring and lifting others in the IRL community.",
-      icon: "🌍",
-      color: "#B400FF",
-      glow: "rgba(180,0,255,0.3)",
-    },
-    {
-      id: "consistency-king",
-      title: "Consistency King",
-      description: "Completed sessions every single week for a full month without missing.",
-      icon: "🔥",
-      color: "#FF6B35",
-      glow: "rgba(255,107,53,0.3)",
-    },
-    {
-      id: "early-adopter",
-      title: "Early Adopter",
-      description: "One of the very first students to join IRL at your institution.",
-      icon: "⚡",
-      color: "#00D4FF",
-      glow: "rgba(0,212,255,0.3)",
-    },
-    {
-      id: "leader-of-the-month",
-      title: "Leader of the Month",
-      description: "Finished #1 on your institution's leaderboard for a full month.",
-      icon: "👑",
-      color: "#FFD700",
-      glow: "rgba(255,215,0,0.3)",
-    },
-    {
-      id: "team-player",
-      title: "Team Player",
-      description: "Recognised for outstanding teamwork and group participation.",
-      icon: "🤝",
-      color: "#4ade80",
-      glow: "rgba(74,222,128,0.3)",
-    },
-  ]
 
   const claimedCount = claimed.length
   const nextReward = rewards.find(r => !claimed.includes(r.id))
@@ -420,71 +363,6 @@ export default function Rewards() {
           </div>
         </div>
 
-        {/* ── SECTION 2: RECOGNITION AWARDS ── */}
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="h-px flex-1 bg-zinc-800" />
-            <p className="text-zinc-400 text-xs uppercase tracking-widest font-bold px-2">Recognition</p>
-            <div className="h-px flex-1 bg-zinc-800" />
-          </div>
-          <p className="text-zinc-700 text-xs text-center mb-4">Awarded by your institution — you cannot claim these yourself</p>
-
-          <div className="space-y-4">
-            {recognitionAwards.map((r) => {
-              const isClaimed = claimed.includes(r.id)
-              return (
-                <div key={r.id} className="overflow-hidden rounded-[28px] border border-zinc-700/50 shadow-[0_20px_80px_rgba(0,0,0,0.25)] bg-gradient-to-br from-zinc-900/80 via-zinc-800/60 to-zinc-900/80">
-                  <div className="relative h-40">
-                    <div className={`h-full w-full bg-gradient-to-br ${
-                      isClaimed ? 'from-purple-900/50 via-zinc-900/60 to-cyan-900/50' : 'from-zinc-800/60 via-zinc-700/40 to-zinc-800/60'
-                    }`} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/90 via-zinc-900/50 to-transparent" />
-                    <div className="absolute top-4 left-4 rounded-full bg-black/40 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
-                      Recognition
-                    </div>
-                    <div className="absolute top-4 right-4 rounded-full bg-white/10 border border-white/10 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
-                      {r.icon}
-                    </div>
-                  </div>
-                  <div className="p-4 pb-4">
-                    <div className="flex items-center justify-between gap-3 mb-2">
-                      <p className="text-zinc-400 text-xs uppercase tracking-[0.2em] font-semibold">
-                        INSTITUTION AWARD
-                      </p>
-                      {isClaimed ? (
-                        <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-[11px] font-bold text-emerald-300 border border-emerald-500/30">
-                          EARNED
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-zinc-700/60 px-3 py-1 text-[11px] font-bold text-zinc-400 border border-zinc-600/50">
-                          LOCKED
-                        </span>
-                      )}
-                    </div>
-                    <h2 className="text-lg font-bold text-white leading-tight mb-2">
-                      {r.title}
-                    </h2>
-                    <p className="text-zinc-300 text-sm leading-5 mb-3">
-                      {r.description}
-                    </p>
-                    <div className="flex justify-center">
-                      {isClaimed ? (
-                        <div className="flex items-center gap-2 text-emerald-400">
-                          <span className="text-2xl">{r.icon}</span>
-                          <span className="text-sm font-bold">Awarded ✓</span>
-                        </div>
-                      ) : (
-                        <p className="text-zinc-500 text-sm">
-                          Awarded by your institution
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
 
         {/* ── SECTION 3: LP REWARDS ── */}
         <div>
@@ -509,7 +387,7 @@ export default function Rewards() {
                 const lpAway = Math.max(reward.points_required - points, 0)
 
                 return (
-                  <div key={reward.id} className="overflow-hidden rounded-[28px] border border-zinc-700/50 shadow-[0_20px_80px_rgba(0,0,0,0.25)] bg-gradient-to-br from-zinc-900/80 via-zinc-800/60 to-zinc-900/80">
+                  <div key={reward.id} className="overflow-hidden rounded-[28px] border border-zinc-700/30 shadow-[0_20px_80px_rgba(0,0,0,0.2)] bg-gradient-to-br from-zinc-900/70 via-zinc-800/40 to-zinc-900/70">
                     <div className="relative h-48">
                       {reward.image_url ? (
                         <img src={reward.image_url} alt={reward.title}
@@ -531,8 +409,9 @@ export default function Rewards() {
                       )}
                       {reward.icon && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="text-6xl opacity-15 transform rotate-12 drop-shadow-lg">
-                            {reward.icon}
+                          <div className="relative text-[5.5rem] leading-none text-white opacity-30 transform rotate-6 drop-shadow-[0_20px_80px_rgba(0,0,0,0.24)]">
+                            <span className="absolute inset-0 text-white opacity-20 blur-[1px]">{reward.icon}</span>
+                            <span className="relative">{reward.icon}</span>
                           </div>
                         </div>
                       )}
@@ -560,7 +439,7 @@ export default function Rewards() {
                         {reward.title}
                       </h2>
                       {reward.description && (
-                        <p className="text-zinc-300 text-sm leading-6 mb-4">
+                        <p className="text-zinc-200 text-sm leading-6 mb-4">
                           {reward.description}
                         </p>
                       )}
