@@ -708,7 +708,7 @@ export default function AdminDashboard() {
                 </>
               )}
               <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
-                <h2 className="text-lg font-bold text-white">Create Group</h2>
+                <h2 className="text-lg font-bold text-white">Create Community</h2>
                 <input placeholder="Community name" value={newCommunity.name}
                   onChange={e => setNewCommunity(p => ({ ...p, name: e.target.value }))}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
@@ -717,7 +717,7 @@ export default function AdminDashboard() {
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
                 <button onClick={createCommunity}
                   className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
-                  🏘 Create Group
+                  🏘 Create Community
                 </button>
               </div>
               <h2 className="text-lg font-bold text-white">All Communities</h2>
