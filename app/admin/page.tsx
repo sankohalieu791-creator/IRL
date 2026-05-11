@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { getUser, getSchool, logout } from "@/lib/auth"
 import InstitutionsTab from "@/components/InstitutionsTab"
 
-type Tab = "proofs" | "sessions" | "members" | "codes" | "groups" | "institutions" | "rewards"
+type Tab = "proofs" | "sessions" | "members" | "codes" | "communities" | "institutions" | "rewards"
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -24,11 +24,11 @@ export default function AdminDashboard() {
   const [generatedCode, setGeneratedCode] = useState("")
   const [proofs, setProofs] = useState<any[]>([])
   const [members, setMembers] = useState<any[]>([])
-  const [groups, setGroups] = useState<any[]>([])
+  const [communities, setCommunities] = useState<any[]>([])
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
-  const [newGroup, setNewGroup] = useState({ name: "", description: "" })
-  const [activeGroupChat, setActiveGroupChat] = useState<any | null>(null)
-  const [groupMessages, setGroupMessages] = useState<any[]>([])
+  const [newCommunity, setNewCommunity] = useState({ name: "", description: "" })
+  const [activeCommunityChat, setActiveCommunityChat] = useState<any | null>(null)
+  const [communityMessages, setCommunityMessages] = useState<any[]>([])
   const [messageText, setMessageText] = useState("")
   const [sendingMessage, setSendingMessage] = useState(false)
   const [uploadingMedia, setUploadingMedia] = useState(false)
@@ -62,7 +62,7 @@ export default function AdminDashboard() {
       if (tab === "codes") await loadCodes()
       if (tab === "proofs") await loadProofs()
       if (tab === "members") await loadMembers()
-      if (tab === "groups") { await loadGroups(); await loadPendingMembers() }
+      if (tab === "communities") { await loadCommunities(); await loadPendingMembers() }
       if (tab === "rewards") await loadRewards()
     }
     load()
@@ -155,22 +155,22 @@ export default function AdminDashboard() {
     setMembers(withStats)
   }
 
-  async function loadGroups() {
-    const { data } = await supabase.from("groups").select("*").eq("institution", SCHOOL)
-    if (data) setGroups(data)
+  async function loadCommunities() {
+    const { data } = await supabase.from("communities").select("*").eq("institution", SCHOOL)
+    if (data) setCommunities(data)
   }
 
   async function loadPendingMembers() {
-    const { data } = await supabase.from("group_members").select("*").eq("status", "pending")
+    const { data } = await supabase.from("community_members").select("*").eq("status", "pending")
     if (data) setPendingMembers(data)
   }
 
-  async function loadGroupMessages(groupId: string) {
+  async function loadCommunityMessages(communityId: string) {
     const { data } = await supabase
-      .from("group_messages").select("*")
-      .eq("group_id", groupId)
+      .from("community_messages").select("*")
+      .eq("community_id", communityId)
       .order("created_at", { ascending: true })
-    if (data) setGroupMessages(data)
+    if (data) setCommunityMessages(data)
   }
 
   async function loadRewards() {
@@ -218,34 +218,34 @@ export default function AdminDashboard() {
     loadRewards()
   }
 
-  async function sendMessage(groupId: string) {
+  async function sendMessage(communityId: string) {
     if (!messageText.trim()) return
     setSendingMessage(true)
-    await supabase.from("group_messages").insert({
-      group_id: groupId, sender: ADMIN,
+    await supabase.from("community_messages").insert({
+      community_id: communityId, sender: ADMIN,
       message: messageText.trim(), media_type: "text"
     })
     setMessageText("")
-    await loadGroupMessages(groupId)
+    await loadCommunityMessages(communityId)
     setSendingMessage(false)
   }
 
-  async function sendMedia(groupId: string, file: File) {
+  async function sendMedia(communityId: string, file: File) {
     setUploadingMedia(true)
     const ext = file.name.split(".").pop()
-    const fileName = `group-${groupId}-${Date.now()}.${ext}`
+    const fileName = `community-${communityId}-${Date.now()}.${ext}`
     const { error } = await supabase.storage.from("proof").upload(fileName, file, { upsert: true })
     if (error) { alert(`Upload error: ${error.message}`); setUploadingMedia(false); return }
     const { data: urlData } = supabase.storage.from("proof").getPublicUrl(fileName)
     const isVideo = file.type.startsWith("video")
-    await supabase.from("group_messages").insert({
-      group_id: groupId, sender: ADMIN,
+    await supabase.from("community_messages").insert({
+      community_id: communityId, sender: ADMIN,
       message: messageText.trim() || "",
       media_url: urlData.publicUrl,
       media_type: isVideo ? "video" : "image"
     })
     setMessageText("")
-    await loadGroupMessages(groupId)
+    await loadCommunityMessages(communityId)
     setUploadingMedia(false)
   }
 
@@ -309,19 +309,19 @@ export default function AdminDashboard() {
           await supabase.from("leaderboard").insert({ user_name: userName, points: session.points })
         }
 
-        const { data: userGroups } = await supabase.from("group_members")
-          .select("group_id").eq("user_name", userName).eq("status", "accepted")
-        if (userGroups && userGroups.length > 0) {
-          for (const g of userGroups) {
-            const { data: gMembers } = await supabase.from("group_members")
-              .select("user_name").eq("group_id", g.group_id).eq("status", "accepted")
-            if (gMembers) {
-              const usernames = gMembers.map(m => m.user_name)
+        const { data: userCommunities } = await supabase.from("community_members")
+          .select("community_id").eq("user_name", userName).eq("status", "accepted")
+        if (userCommunities && userCommunities.length > 0) {
+          for (const c of userCommunities) {
+            const { data: cMembers } = await supabase.from("community_members")
+              .select("user_name").eq("community_id", c.community_id).eq("status", "accepted")
+            if (cMembers) {
+              const usernames = cMembers.map(m => m.user_name)
               const { data: lbData } = await supabase.from("leaderboard")
                 .select("points").in("user_name", usernames)
               if (lbData) {
                 const totalLP = lbData.reduce((sum, u) => sum + u.points, 0)
-                await supabase.from("groups").update({ total_lp: totalLP }).eq("id", g.group_id)
+                await supabase.from("communities").update({ total_lp: totalLP }).eq("id", c.community_id)
               }
             }
           }
@@ -351,51 +351,51 @@ export default function AdminDashboard() {
     alert(`Proof ${status}!`)
   }
 
-  async function createGroup() {
-    if (!newGroup.name) return alert("Please enter a group name")
-    const { error } = await supabase.from("groups")
-      .insert({ name: newGroup.name, description: newGroup.description, institution: SCHOOL, total_lp: 0 })
-    if (error) return alert(`Error: ${error.message}`)
-    setNewGroup({ name: "", description: "" })
-    loadGroups()
-    alert("Group created!")
+  async function createCommunity() {
+    if (!newCommunity.name) return alert("Please enter a community name")
+    const { error } = await supabase.from("communities")
+      .insert({ name: newCommunity.name, description: newCommunity.description, institution: SCHOOL, total_lp: 0 })
+    if (error) alert(`Error: ${error.message}`)
+    setNewCommunity({ name: "", description: "" })
+    loadCommunities()
+    alert("Community created!")
   }
 
   async function handleMemberRequest(id: string, status: string) {
-    await supabase.from("group_members").update({ status }).eq("id", id)
+    await supabase.from("community_members").update({ status }).eq("id", id)
     loadPendingMembers()
   }
 
-  async function deleteGroup(id: string) {
-    if (!confirm("Delete this group? This cannot be undone.")) return
+  async function deleteCommunity(id: string) {
+    if (!confirm("Delete this community? This cannot be undone.")) return
     
     try {
       const { error: membersError } = await supabase
-        .from("group_members")
+        .from("community_members")
         .delete()
-        .eq("group_id", id)
+        .eq("community_id", id)
       
       if (membersError) throw membersError
       
       const { error: messagesError } = await supabase
-        .from("group_messages")
+        .from("community_messages")
         .delete()
-        .eq("group_id", id)
+        .eq("community_id", id)
       
       if (messagesError) throw messagesError
       
-      const { error: groupError } = await supabase
-        .from("groups")
+      const { error: communityError } = await supabase
+        .from("communities")
         .delete()
         .eq("id", id)
       
-      if (groupError) throw groupError
+      if (communityError) throw communityError
       
-      await loadGroups()
-      alert("Group deleted successfully!")
+      await loadCommunities()
+      alert("Community deleted successfully!")
     } catch (error) {
-      console.error("Error deleting group:", error)
-      alert("Failed to delete group")
+      console.error("Error deleting community:", error)
+      alert("Failed to delete community")
     }
   }
 
@@ -412,7 +412,7 @@ export default function AdminDashboard() {
     { key: "proofs", label: "Proofs", icon: "📎" },
     { key: "sessions", label: "Sessions", icon: "⚡" },
     { key: "members", label: "Members", icon: "👥" },
-    { key: "groups", label: "Groups", icon: "🏘" },
+    { key: "communities", label: "Communities", icon: "👥 Communities" },
     { key: "rewards", label: "Rewards", icon: "🎁" },
     ...(isSuperAdmin ? [
       { key: "codes" as Tab, label: "Codes", icon: "🔑" },
@@ -420,25 +420,25 @@ export default function AdminDashboard() {
     ] : []),
   ]
 
-  if (activeGroupChat) {
+  if (activeCommunityChat) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
         <div className="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex items-center gap-4 flex-shrink-0">
-          <button onClick={() => setActiveGroupChat(null)}
+          <button onClick={() => setActiveCommunityChat(null)}
             className="text-zinc-400 hover:text-white text-sm">← Back</button>
           <div>
-            <h1 className="text-lg font-bold text-cyan-400">{activeGroupChat.name} — Chat</h1>
+            <h1 className="text-lg font-bold text-cyan-400">{activeCommunityChat.name} — Announcements</h1>
             <p className="text-zinc-500 text-xs">Sending as {ADMIN} (Admin)</p>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-4 max-w-2xl mx-auto w-full">
-          {groupMessages.length === 0 && (
+          {communityMessages.length === 0 && (
             <div className="text-center py-16 text-zinc-600">
               <p className="text-4xl mb-3">💬</p>
               <p>No messages yet. Send the first one.</p>
             </div>
           )}
-          {groupMessages.map(msg => (
+          {communityMessages.map(msg => (
             <div key={msg.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-xs font-bold">
@@ -463,13 +463,13 @@ export default function AdminDashboard() {
             <label className="cursor-pointer text-zinc-400 hover:text-white flex-shrink-0">
               <span className="text-xl">{uploadingMedia ? "⏳" : "📎"}</span>
               <input type="file" accept="image/*,video/*" className="hidden" disabled={uploadingMedia}
-                onChange={e => { const f = e.target.files?.[0]; if (f) sendMedia(activeGroupChat.id, f) }} />
+                onChange={e => { const f = e.target.files?.[0]; if (f) sendMedia(activeCommunityChat.id, f) }} />
             </label>
             <input value={messageText} onChange={e => setMessageText(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") sendMessage(activeGroupChat.id) }}
+              onKeyDown={e => { if (e.key === "Enter") sendMessage(activeCommunityChat.id) }}
               placeholder="Send a message to this group..."
               className="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-zinc-600" />
-            <button onClick={() => sendMessage(activeGroupChat.id)}
+            <button onClick={() => sendMessage(activeCommunityChat.id)}
               disabled={sendingMessage || !messageText.trim()}
               className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-30"
               style={{ background: messageText.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "#27272a", color: "white" }}>
@@ -684,7 +684,7 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {tab === "groups" && (
+          {tab === "communities" && (
             <div className="space-y-4">
               {pendingMembers.length > 0 && (
                 <>
@@ -709,36 +709,36 @@ export default function AdminDashboard() {
               )}
               <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
                 <h2 className="text-lg font-bold text-white">Create Group</h2>
-                <input placeholder="Group name" value={newGroup.name}
-                  onChange={e => setNewGroup(p => ({ ...p, name: e.target.value }))}
+                <input placeholder="Community name" value={newCommunity.name}
+                  onChange={e => setNewCommunity(p => ({ ...p, name: e.target.value }))}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-                <input placeholder="Description (optional)" value={newGroup.description}
-                  onChange={e => setNewGroup(p => ({ ...p, description: e.target.value }))}
+                <input placeholder="Description (optional)" value={newCommunity.description}
+                  onChange={e => setNewCommunity(p => ({ ...p, description: e.target.value }))}  
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-                <button onClick={createGroup}
+                <button onClick={createCommunity}
                   className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
                   🏘 Create Group
                 </button>
               </div>
-              <h2 className="text-lg font-bold text-white">All Groups</h2>
-              {groups.length === 0 && (
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No groups yet</div>
+              <h2 className="text-lg font-bold text-white">All Communities</h2>
+              {communities.length === 0 && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center text-zinc-500">No communities yet</div>
               )}
-              {groups.map(g => (
-                <div key={g.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+              {communities.map(c => (
+                <div key={c.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <p className="font-bold text-white text-base">{g.name}</p>
-                      {g.description && <p className="text-zinc-500 text-sm">{g.description}</p>}
-                      <p className="text-zinc-600 text-xs mt-1">⚡ {g.total_lp || 0} LP</p>
+                      <p className="font-bold text-white text-base">{c.name}</p>
+                      {c.description && <p className="text-zinc-500 text-sm">{c.description}</p>}
+                      <p className="text-zinc-600 text-xs mt-1">⚡ {c.total_lp || 0} LP</p>
                     </div>
-                    <button onClick={() => deleteGroup(g.id)}
+                    <button onClick={() => deleteCommunity(c.id)}
                       className="text-red-400 text-sm border border-red-400/30 px-3 py-1.5 rounded-xl">
                       🗑 Delete
                     </button>
                   </div>
                   <button
-                    onClick={() => { setActiveGroupChat(g); loadGroupMessages(g.id) }}
+                    onClick={() => { setActiveCommunityChat(c); loadCommunityMessages(c.id) }}
                     className="w-full py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-sm font-semibold text-zinc-300 hover:border-cyan-500 hover:text-white transition-colors">
                     💬 Send Message to Group
                   </button>

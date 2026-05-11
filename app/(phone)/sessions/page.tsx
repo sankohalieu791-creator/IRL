@@ -191,7 +191,7 @@ function SessionsContent() {
       {/* TABS */}
       <div className="flex-shrink-0 flex text-sm border-b border-zinc-800">
         <button className="flex-1 py-2.5 text-white font-semibold bg-zinc-800">Sessions</button>
-        <button onClick={() => router.push("/groups")} className="flex-1 py-2.5 text-zinc-400">Groups</button>
+        <button onClick={() => router.push("/communities")} className="flex-1 py-2.5 text-zinc-400">Communities</button>
         <button onClick={() => router.push("/leaderboard")} className="flex-1 py-2.5 text-zinc-400">Leaderboard</button>
       </div>
 
