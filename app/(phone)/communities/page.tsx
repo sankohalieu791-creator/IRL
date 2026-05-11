@@ -43,7 +43,7 @@ export default function Communities() {
   const [communities, setCommunities] = useState<Community[]>([])
   const [myMemberships, setMyMemberships] = useState<Record<string, string>>({})
   const [activeCommunity, setActiveCommunity] = useState<Community | null>(null)
-  const [activeTab, setActiveTab] = useState<"feed" | "leaderboard" | "members">("feed")
+  const [activeTab, setActiveTab] = useState<"feed" | "about">("feed")
   const [members, setMembers] = useState<Member[]>([])
   const [communityLeaderboard, setCommunityLeaderboard] = useState<any[]>([])
   const [messages, setMessages] = useState<Message[]>([])
@@ -278,117 +278,80 @@ export default function Communities() {
 
     return (
       <div className="flex flex-col h-full bg-black text-white overflow-hidden">
-
-        <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-zinc-800">
+        
+        {/* Header with Community Info */}
+        <div className="flex-shrink-0 px-4 pt-4 pb-2 border-b border-zinc-800">
           <button
             onClick={() => setActiveCommunity(null)}
-            className="text-zinc-500 text-sm mb-2 flex items-center gap-1"
+            className="text-zinc-500 text-sm mb-3 flex items-center gap-1"
           >
             ← Back
           </button>
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-lg font-bold text-white">{activeCommunity.name}</h1>
-              <p className="text-zinc-500 text-xs">
-                {activeCommunity.link_count} Links · {activeCommunity.post_count} Posts · {totalLP} LP Total
-              </p>
+          <div className="flex justify-between items-start gap-3 mb-4">
+            <div className="flex-1">
+              <h1 className="text-xl font-bold text-white">{activeCommunity.name}</h1>
+              <p className="text-zinc-500 text-sm mt-1">{activeCommunity.institution}</p>
+            </div>
+            <button onClick={() => {
+              if (!myMemberships[activeCommunity.id]) {
+                linkCommunity(activeCommunity.id)
+              }
+            }}
+              disabled={loading}
+              className="flex-shrink-0 px-4 py-2 bg-purple-500 rounded-lg font-bold text-sm"
+            >
+              {myMemberships[activeCommunity.id] === "accepted" ? "✓ Linked" : "🔗 Link"}
+            </button>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+            <div style={{
+              background: "rgba(0,212,255,0.1)",
+              border: "1px solid rgba(0,212,255,0.2)",
+              borderRadius: 10, padding: 8
+            }}>
+              <p style={{ color: "#00D4FF", fontWeight: 800, fontSize: 16 }}>{activeCommunity.link_count}</p>
+              <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, marginTop: 2 }}>Links</p>
+            </div>
+            <div style={{
+              background: "rgba(180,0,255,0.1)",
+              border: "1px solid rgba(180,0,255,0.2)",
+              borderRadius: 10, padding: 8
+            }}>
+              <p style={{ color: "#B400FF", fontWeight: 800, fontSize: 16 }}>{activeCommunity.post_count}</p>
+              <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, marginTop: 2 }}>Posts</p>
+            </div>
+            <div style={{
+              background: "rgba(255,165,0,0.1)",
+              border: "1px solid rgba(255,165,0,0.2)",
+              borderRadius: 10, padding: 8
+            }}>
+              <p style={{ color: "#FFA500", fontWeight: 800, fontSize: 16 }}>{totalLP}k</p>
+              <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, marginTop: 2 }}>Total LP</p>
             </div>
           </div>
         </div>
 
+        {/* Tabs */}
         <div className="flex-shrink-0 flex border-b border-zinc-800">
-          {(["feed", "leaderboard", "members"] as const).map(tab => (
+          {(["feed", "about"] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-2.5 text-xs font-bold capitalize transition-colors ${
+              className={`flex-1 py-3 text-sm font-bold capitalize transition-colors ${
                 activeTab === tab ? "text-cyan-400 border-b-2 border-cyan-400" : "text-zinc-500"
               }`}>
-              {tab === "feed" ? "💬 Feed" : tab === "leaderboard" ? "🏆 Board" : "👥 Members"}
+              {tab === "feed" ? "Feed" : "About"}
             </button>
           ))}
         </div>
 
+        {/* Feed Tab */}
         {activeTab === "feed" && (
           <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-            {/* Admin Announcement Input */}
-            {isAdmin && (
-              <div className="flex-shrink-0 px-4 py-3 border-b border-zinc-800">
-                <div style={{
-                  background: "rgba(180,0,255,0.1)",
-                  border: "1px solid rgba(180,0,255,0.3)",
-                  borderRadius: 16, padding: "8px 12px",
-                  display: "flex", alignItems: "center", gap: 8
-                }}>
-                  <span style={{ fontSize: 14, flexShrink: 0 }}>📢</span>
-                  <input
-                    value={announcementText}
-                    onChange={e => setAnnouncementText(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter" && activeCommunity) postAnnouncement(activeCommunity.id) }}
-                    placeholder="Post an announcement..."
-                    style={{
-                      flex: 1, background: "transparent", border: "none",
-                      color: "white", fontSize: 13, outline: "none"
-                    }}
-                  />
-                  <button onClick={() => activeCommunity && postAnnouncement(activeCommunity.id)}
-                    disabled={postingAnnouncement || !announcementText.trim()}
-                    style={{
-                      flexShrink: 0, padding: "6px 14px",
-                      background: announcementText.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "rgba(255,255,255,0.08)",
-                      border: "none", borderRadius: 10,
-                      color: announcementText.trim() ? "white" : "rgba(255,255,255,0.3)",
-                      fontWeight: 700, fontSize: 12, cursor: announcementText.trim() ? "pointer" : "default"
-                    }}>
-                    {postingAnnouncement ? "..." : "Send"}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* User Message Input */}
-            <div className="flex-shrink-0 px-4 py-3 border-b border-zinc-800">
-              <div style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                borderRadius: 16, padding: "8px 12px",
-                display: "flex", alignItems: "center", gap: 8
-              }}>
-                <label style={{ flexShrink: 0, cursor: "pointer" }}>
-                  <span style={{ fontSize: 20 }}>{userUploadingMedia ? "⏳" : "📎"}</span>
-                  <input type="file" accept="image/*,video/*"
-                    className="hidden" disabled={userUploadingMedia}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file && activeCommunity) sendUserMedia(activeCommunity.id, file)
-                    }} />
-                </label>
-                <input
-                  value={userMessageText}
-                  onChange={e => setUserMessageText(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && activeCommunity) sendUserMessage(activeCommunity.id) }}
-                  placeholder="Send a message..."
-                  style={{
-                    flex: 1, background: "transparent", border: "none",
-                    color: "white", fontSize: 13, outline: "none"
-                  }}
-                />
-                <button onClick={() => activeCommunity && sendUserMessage(activeCommunity.id)}
-                  disabled={userSendingMessage || !userMessageText.trim()}
-                  style={{
-                    flexShrink: 0, padding: "6px 14px",
-                    background: userMessageText.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "rgba(255,255,255,0.08)",
-                    border: "none", borderRadius: 10,
-                    color: userMessageText.trim() ? "white" : "rgba(255,255,255,0.3)",
-                    fontWeight: 700, fontSize: 12, cursor: userMessageText.trim() ? "pointer" : "default"
-                  }}>
-                  {userSendingMessage ? "..." : "Send"}
-                </button>
-              </div>
-            </div>
-
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-24">
               {messages.length === 0 && (
-                <div style={{ textAlign: "center", padding: "40px 0" }}>
+                <div style={{ textAlign: "center", padding: "40px 20px" }}>
                   <p style={{ fontSize: 32, marginBottom: 8 }}>💬</p>
                   <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>No posts yet</p>
                   <p style={{ color: "rgba(255,255,255,0.2)", fontSize: 11, marginTop: 4 }}>
@@ -406,8 +369,8 @@ export default function Communities() {
                       borderRadius: 12, padding: "8px 12px",
                       marginBottom: 8, display: "flex", alignItems: "center", gap: 6
                     }}>
-                      <span style={{ fontSize: 16 }}>📢</span>
-                      <span style={{ color: "#B400FF", fontSize: 11, fontWeight: 700 }}>ANNOUNCEMENT</span>
+                      <span style={{ fontSize: 14 }}>📢</span>
+                      <span style={{ color: "#B400FF", fontSize: 10, fontWeight: 700 }}>ANNOUNCEMENT</span>
                     </div>
                   )}
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
@@ -476,67 +439,84 @@ export default function Communities() {
               ))}
               <div ref={messagesEndRef} />
             </div>
-          </div>
-        )}
 
-        {activeTab === "leaderboard" && (
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-            {communityLeaderboard.map((u, i) => (
-              <div key={`${u.user_name}-${i}`}
-                className={`rounded-xl p-3 flex justify-between items-center border ${
-                  i === 0 ? "bg-yellow-500/10 border-yellow-500/40" :
-                  i === 1 ? "bg-zinc-400/10 border-zinc-400/40" :
-                  i === 2 ? "bg-orange-500/10 border-orange-500/40" :
-                  "bg-zinc-900 border-zinc-800"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-base w-6">{i < 3 ? medals[i] : `${i + 1}.`}</span>
-                  <div style={{
-                    width: 32, height: 32, borderRadius: "50%",
-                    background: "linear-gradient(135deg, #B400FF, #00D4FF)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 13, fontWeight: 900, color: "white"
+            {/* Chat Input at Bottom */}
+            <div className="flex-shrink-0 fixed bottom-16 left-0 right-0 px-4 py-3 bg-black border-t border-zinc-800">
+              <div style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 16, padding: "8px 12px",
+                display: "flex", alignItems: "center", gap: 8
+              }}>
+                <label style={{ flexShrink: 0, cursor: "pointer" }}>
+                  <span style={{ fontSize: 18 }}>{userUploadingMedia ? "⏳" : "📎"}</span>
+                  <input type="file" accept="image/*,video/*"
+                    className="hidden" disabled={userUploadingMedia}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file && activeCommunity) sendUserMedia(activeCommunity.id, file)
+                    }} />
+                </label>
+                <input
+                  value={userMessageText}
+                  onChange={e => setUserMessageText(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && activeCommunity) sendUserMessage(activeCommunity.id) }}
+                  placeholder="Send a message..."
+                  style={{
+                    flex: 1, background: "transparent", border: "none",
+                    color: "white", fontSize: 13, outline: "none"
+                  }}
+                />
+                <button onClick={() => activeCommunity && sendUserMessage(activeCommunity.id)}
+                  disabled={userSendingMessage || !userMessageText.trim()}
+                  style={{
+                    flexShrink: 0, padding: "6px 14px",
+                    background: userMessageText.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "rgba(255,255,255,0.08)",
+                    border: "none", borderRadius: 10,
+                    color: userMessageText.trim() ? "white" : "rgba(255,255,255,0.3)",
+                    fontWeight: 700, fontSize: 12, cursor: userMessageText.trim() ? "pointer" : "default"
                   }}>
-                    {u.user_name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="font-bold text-sm text-white">{u.user_name}</p>
-                    {u.school && <p className="text-zinc-500 text-xs">{u.school}</p>}
-                  </div>
-                </div>
-                <span className="text-cyan-400 font-bold text-sm">{u.points} LP</span>
+                  {userSendingMessage ? "..." : "Send"}
+                </button>
               </div>
-            ))}
-            {communityLeaderboard.length === 0 && (
-              <p className="text-zinc-500 text-sm text-center py-8">No members yet</p>
-            )}
+            </div>
           </div>
         )}
 
-        {activeTab === "members" && (
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-            {members.map((m, i) => (
-              <div key={`${m.user_name}-${i}`}
-                className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex items-center gap-3"
-              >
-                <div style={{
-                  width: 36, height: 36, borderRadius: "50%",
-                  background: "linear-gradient(135deg, #B400FF, #00D4FF)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 14, fontWeight: 900, color: "white"
-                }}>
-                  {m.user_name.charAt(0).toUpperCase()}
-                </div>
-                <p className="font-semibold text-sm text-white">{m.user_name}</p>
-                {m.user_name === user && (
-                  <span className="ml-auto text-cyan-400 text-xs font-bold">You</span>
+        {/* About Tab */}
+        {activeTab === "about" && (
+          <div className="flex-1 overflow-y-auto px-4 py-4 pb-20">
+            {activeCommunity.description && (
+              <div className="mb-6">
+                <h3 className="text-sm font-bold text-cyan-400 mb-2">About</h3>
+                <p className="text-zinc-300 text-sm leading-relaxed">{activeCommunity.description}</p>
+              </div>
+            )}
+            
+            <div className="mb-6">
+              <h3 className="text-sm font-bold text-cyan-400 mb-2">Members ({members.length})</h3>
+              <div className="space-y-2">
+                {members.slice(0, 5).map((m, i) => (
+                  <div key={`${m.user_name}-${i}`} className="flex items-center gap-3 bg-zinc-900/50 px-3 py-2 rounded-lg">
+                    <div style={{
+                      width: 32, height: 32, borderRadius: "50%",
+                      background: "linear-gradient(135deg, #B400FF, #00D4FF)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 12, fontWeight: 900, color: "white"
+                    }}>
+                      {m.user_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-xs text-white">{m.user_name}</p>
+                      {m.user_name === user && <p className="text-cyan-400 text-xs">You</p>}
+                    </div>
+                  </div>
+                ))}
+                {members.length > 5 && (
+                  <p className="text-zinc-500 text-xs text-center py-2">+{members.length - 5} more members</p>
                 )}
               </div>
-            ))}
-            {members.length === 0 && (
-              <p className="text-zinc-500 text-sm text-center py-8">No members yet</p>
-            )}
+            </div>
           </div>
         )}
 
