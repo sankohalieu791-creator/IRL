@@ -1,0 +1,37 @@
+
+> irl-app@0.1.0 build
+> next build
+
+Ôû▓ Next.js 16.1.6 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+Ô£ô Compiled successfully in 9.5s
+  Running TypeScript ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/13) ...
+  Generating static pages using 7 workers (3/13) 
+  Generating static pages using 7 workers (6/13) 
+  Generating static pages using 7 workers (9/13) 
+Ô£ô Generating static pages using 7 workers (13/13) in 1413.1ms
+  Finalizing page optimization ...
+
+Route (app)
+Ôöî Ôùï /
+Ôö£ Ôùï /_not-found
+Ôö£ Ôùï /admin
+Ôö£ ãÆ /api/auth
+Ôö£ ãÆ /api/try-session
+Ôö£ Ôùï /communities
+Ôö£ Ôùï /hub
+Ôö£ Ôùï /leaderboard
+Ôö£ Ôùï /login
+Ôö£ Ôùï /profile
+Ôö£ Ôùï /rewards
+Ôö£ Ôùï /sessions
+Ôöö ãÆ /user/[username]
+
+
+Ôùï  (Static)   prerendered as static content
+ãÆ  (Dynamic)  server-rendered on demand
+

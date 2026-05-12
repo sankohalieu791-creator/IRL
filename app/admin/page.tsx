@@ -26,7 +26,7 @@ export default function AdminDashboard() {
   const [members, setMembers] = useState<any[]>([])
   const [communities, setCommunities] = useState<any[]>([])
   const [pendingMembers, setPendingMembers] = useState<any[]>([])
-  const [newCommunity, setNewCommunity] = useState({ name: "", description: "" })
+  const [newCommunity, setNewCommunity] = useState({ name: "", description: "", is_private: false })
   const [activeCommunityChat, setActiveCommunityChat] = useState<any | null>(null)
   const [communityMessages, setCommunityMessages] = useState<any[]>([])
   const [messageText, setMessageText] = useState("")
@@ -354,9 +354,9 @@ export default function AdminDashboard() {
   async function createCommunity() {
     if (!newCommunity.name) return alert("Please enter a community name")
     const { error } = await supabase.from("communities")
-      .insert({ name: newCommunity.name, description: newCommunity.description, institution: SCHOOL, total_lp: 0 })
+      .insert({ name: newCommunity.name, description: newCommunity.description, institution: SCHOOL, total_lp: 0, is_private: newCommunity.is_private })
     if (error) alert(`Error: ${error.message}`)
-    setNewCommunity({ name: "", description: "" })
+    setNewCommunity({ name: "", description: "", is_private: false })
     loadCommunities()
     alert("Community created!")
   }
@@ -715,6 +715,14 @@ export default function AdminDashboard() {
                 <input placeholder="Description (optional)" value={newCommunity.description}
                   onChange={e => setNewCommunity(p => ({ ...p, description: e.target.value }))}  
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
+                <div className="flex items-center gap-3 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3">
+                  <input type="checkbox" id="isPrivate" checked={newCommunity.is_private}
+                    onChange={e => setNewCommunity(p => ({ ...p, is_private: e.target.checked }))}
+                    className="w-4 h-4 cursor-pointer" />
+                  <label htmlFor="isPrivate" className="flex-1 text-white cursor-pointer font-semibold">
+                    {newCommunity.is_private ? "🔒 Private" : "🌐 Public"}
+                  </label>
+                </div>
                 <button onClick={createCommunity}
                   className="w-full py-3 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-xl font-bold">
                   🏘 Create Community

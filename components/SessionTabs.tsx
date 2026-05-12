@@ -9,7 +9,6 @@ export default function SessionTabs() {
 
   const tabs = [
     { name: "Sessions", href: "/sessions" },
-    { name: "Groups", href: "/groups" },
     { name: "Leaderboard", href: "/leaderboard" }
   ]
 
