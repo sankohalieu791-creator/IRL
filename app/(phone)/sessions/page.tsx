@@ -152,7 +152,8 @@ function SessionsContent() {
           session_category: session?.category || "General",
           media_url: proofUrl,
           media_type: isVideo ? "video" : "image",
-          tried_count: 0
+          tried_count: 0,
+          visibility: shareType === "hub" ? "public" : "private"
         })
         await supabase.from("notifications").insert({
           user_name: user, title: "LP Awarded! ⚡",

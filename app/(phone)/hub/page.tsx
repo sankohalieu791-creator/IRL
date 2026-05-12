@@ -56,27 +56,35 @@ export default function Hub() {
           const id = entry.target.getAttribute("data-post-id")
           if (!id) return
           const vid = videoRefs.current[id]
-          if (entry.isIntersecting && entry.intersectionRatio > 0.7) {
-            if (vid) {
-              vid.muted = false
-              vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}) })
-            }
-          } else if (vid) {
+          if (!vid) return
+          
+          if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+            vid.muted = true
+            vid.play().catch(() => console.log("Autoplay prevented"))
+          } else {
             vid.pause()
             vid.currentTime = 0
-            vid.muted = true
           }
         })
       },
-      { threshold: 0.7 }
+      { threshold: 0.5 }
     )
     return () => observerRef.current?.disconnect()
   }, [])
 
   useEffect(() => {
-    Object.values(cardRefs.current).forEach((el) => {
-      if (el) observerRef.current?.observe(el)
+    if (posts.length === 0) return
+    // Observe all cards
+    const cards = Object.values(cardRefs.current).filter(el => el !== null)
+    cards.forEach((el) => {
+      if (el && observerRef.current) observerRef.current.observe(el)
     })
+    // Auto-play first video on mount
+    const firstVid = videoRefs.current[posts[0].id]
+    if (firstVid && firstVid.paused) {
+      firstVid.muted = true
+      firstVid.play().catch(() => {})
+    }
   }, [posts])
 
   async function loadPosts() {
@@ -84,12 +92,27 @@ export default function Hub() {
     let query = supabase
       .from("hub_posts")
       .select("*")
-      .eq("school", school)
       .order("created_at", { ascending: false })
       .limit(50)
-    if (filter !== "All") query = query.eq("session_type", filter)
-    const { data } = await query
-    if (data) setPosts(data)
+    
+    // Build visibility filter
+    // Show: public posts + private posts from same school
+    const { data: allPosts } = await query
+    
+    if (allPosts) {
+      const filtered = allPosts.filter(post => {
+        // Always show public posts
+        if (post.visibility === "public") return true
+        // Show private posts only if from same school
+        if (post.visibility === "private" && post.school === school) return true
+        return false
+      })
+      if (filter !== "All") {
+        setPosts(filtered.filter(p => p.session_type === filter))
+      } else {
+        setPosts(filtered)
+      }
+    }
     setLoading(false)
   }
 
@@ -230,7 +253,7 @@ export default function Hub() {
               <video
                 ref={(el) => { videoRefs.current[post.id] = el }}
                 src={post.media_url}
-                autoPlay loop muted playsInline
+                loop muted playsInline
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (

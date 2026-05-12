@@ -10,6 +10,8 @@ type Community = {
   id: string
   name: string
   description?: string
+  category?: string
+  location?: string
   institution: string
   total_lp: number
   is_private?: boolean
@@ -37,12 +39,7 @@ type Message = {
   created_at: string
   is_announcement?: boolean
   lp_earned?: number
-}
-
-type PostEngagement = {
-  likes: number
-  comments: number
-  shares: number
+  is_pinned?: boolean
 }
 
 export default function Communities() {
@@ -51,6 +48,7 @@ export default function Communities() {
   const [school, setSchool] = useState("")
   const [role, setRole] = useState("")
   const [communities, setCommunities] = useState<Community[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
   const [myMemberships, setMyMemberships] = useState<Record<string, string>>({})
   const [activeCommunity, setActiveCommunity] = useState<Community | null>(null)
   const [activeTab, setActiveTab] = useState<"feed" | "about">("feed")
@@ -58,13 +56,12 @@ export default function Communities() {
   const [communityLeaderboard, setCommunityLeaderboard] = useState<any[]>([])
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
+  const [isCommunityAdmin, setIsCommunityAdmin] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   const [userMessageText, setUserMessageText] = useState("")
   const [userSendingMessage, setUserSendingMessage] = useState(false)
   const [userUploadingMedia, setUserUploadingMedia] = useState(false)
-  const [announcementText, setAnnouncementText] = useState("")
-  const [postingAnnouncement, setPostingAnnouncement] = useState(false)
 
   useEffect(() => {
     const u = getUser() || ""
@@ -77,15 +74,8 @@ export default function Communities() {
     if (user) {
       loadCommunities()
       loadMyMemberships()
-      checkIfAdmin()
     }
   }, [user])
-
-  useEffect(() => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "auto" })
-    }, 100)
-  }, [messages])
 
   useEffect(() => {
     if (!activeCommunity) return
@@ -102,15 +92,6 @@ export default function Communities() {
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [activeCommunity])
-
-  async function checkIfAdmin() {
-    const { data } = await supabase
-      .from("users")
-      .select("role")
-      .eq("user_name", user)
-      .maybeSingle()
-    if (data?.role === "admin") setRole("admin")
-  }
 
   async function loadCommunities() {
     const { data } = await supabase
@@ -129,7 +110,6 @@ export default function Communities() {
           .from("community_messages")
           .select("*", { count: "exact", head: true })
           .eq("community_id", c.id)
-          .neq("media_type", "text")
         return {
           ...c,
           member_count: memberCount || 0,
@@ -172,6 +152,7 @@ export default function Communities() {
     loadMembers(community.id)
     loadCommunityLeaderboard(community.id)
     loadMessages(community.id)
+    setIsCommunityAdmin(community.created_by === user)
   }
 
   async function loadMembers(communityId: string) {
@@ -226,26 +207,12 @@ export default function Communities() {
       sender: user,
       message: userMessageText.trim(),
       media_type: "text",
-      is_announcement: false
+      is_announcement: false,
+      is_pinned: false
     })
     setUserMessageText("")
     await loadMessages(communityId)
     setUserSendingMessage(false)
-  }
-
-  async function postAnnouncement(communityId: string) {
-    if (!announcementText.trim()) return
-    setPostingAnnouncement(true)
-    await supabase.from("community_messages").insert({
-      community_id: communityId,
-      sender: user,
-      message: announcementText.trim(),
-      media_type: "text",
-      is_announcement: true
-    })
-    setAnnouncementText("")
-    await loadMessages(communityId)
-    setPostingAnnouncement(false)
   }
 
   async function sendUserMedia(communityId: string, file: File) {
@@ -262,7 +229,8 @@ export default function Communities() {
       message: userMessageText.trim() || "",
       media_url: urlData.publicUrl,
       media_type: isVideo ? "video" : "image",
-      is_announcement: false
+      is_announcement: false,
+      is_pinned: false
     })
     setUserMessageText("")
     await loadMessages(communityId)
@@ -275,120 +243,93 @@ export default function Communities() {
     const h = Math.floor(diff / 3600000)
     const d = Math.floor(diff / 86400000)
     if (m < 1) return "just now"
-    if (m < 60) return `${m}m ago`
-    if (h < 24) return `${h}h ago`
-    return `${d}d ago`
+    if (m < 60) return `${m}m`
+    if (h < 24) return `${h}h`
+    return `${d}d`
   }
-
-  const isAdmin = role === "admin" || activeCommunity?.created_by === user
-  const isCommunityAdmin = activeCommunity?.created_by === user
 
   if (activeCommunity) {
     const totalLP = communityLeaderboard.reduce((sum, u) => sum + u.points, 0)
 
     return (
       <div className="flex flex-col h-full bg-black text-white overflow-hidden">
-        
-        {/* Header with Community Info */}
+        {/* Header */}
         <div className="flex-shrink-0 px-4 pt-4 pb-3 border-b border-zinc-800">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <button
-              onClick={() => setActiveCommunity(null)}
-              className="text-zinc-500 text-sm flex items-center gap-1"
-            >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <button onClick={() => setActiveCommunity(null)}
+              className="text-zinc-500 text-sm flex items-center gap-1">
               ← Back
             </button>
-            <button onClick={() => router.push("/communities")}
-              style={{ fontSize: 18, cursor: "pointer", color: "rgba(255,255,255,0.5)" }}>
+            <button style={{ fontSize: 18, cursor: "pointer", color: "rgba(255,255,255,0.5)" }}>
               ⋯
             </button>
           </div>
           
-          <div className="flex justify-between items-start gap-3 mb-3">
-            <div className="flex-1">
-              <h1 className="text-lg font-bold text-white">{activeCommunity.name}</h1>
-              <p className="text-zinc-500 text-xs mt-0.5">{activeCommunity.institution}</p>
-            </div>
-            <button onClick={() => {
-              if (!myMemberships[activeCommunity.id]) {
-                linkCommunity(activeCommunity.id)
-              }
-            }}
-              disabled={loading}
-              className="flex-shrink-0 px-4 py-1.5 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-lg font-bold text-xs"
-            >
-              {myMemberships[activeCommunity.id] === "accepted" ? "✓ Linked" : "Link"}
-            </button>
+          <h1 className="text-lg font-bold text-white mb-2">{activeCommunity.name}</h1>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 12, fontSize: 12,
+            color: "rgba(255,255,255,0.5)", marginBottom: 12
+          }}>
+            <span>📍 {activeCommunity.location || activeCommunity.institution}</span>
           </div>
 
-          {/* Stats Bar - Single row format */}
+          {/* Stats */}
           <div style={{
             background: "rgba(255,255,255,0.04)",
             border: "1px solid rgba(255,255,255,0.08)",
             borderRadius: 12, padding: "10px 12px",
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            fontSize: 12, color: "rgba(255,255,255,0.7)", marginBottom: 10
+            fontSize: 13, fontWeight: 600, marginBottom: 10
           }}>
-            <span><strong style={{ color: "#00D4FF" }}>{activeCommunity.link_count}</strong> links</span>
-            <span style={{ color: "rgba(255,255,255,0.2)" }}>•</span>
-            <span><strong style={{ color: "#B400FF" }}>{activeCommunity.post_count}</strong> posts</span>
-            <span style={{ color: "rgba(255,255,255,0.2)" }}>•</span>
-            <span><strong style={{ color: "#FFA500" }}>{totalLP}k</strong> LP</span>
+            <div style={{ textAlign: "center", flex: 1 }}>
+              <p style={{ color: "#00D4FF" }}>{activeCommunity.link_count}</p>
+              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 10, marginTop: 2 }}>Links</p>
+            </div>
+            <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.1)" }} />
+            <div style={{ textAlign: "center", flex: 1 }}>
+              <p style={{ color: "white" }}>{activeCommunity.post_count}</p>
+              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 10, marginTop: 2 }}>Posts</p>
+            </div>
+            <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.1)" }} />
+            <div style={{ textAlign: "center", flex: 1 }}>
+              <p style={{ color: "#FFA500" }}>{Math.round(totalLP / 1000)}k</p>
+              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 10, marginTop: 2 }}>Total LP</p>
+            </div>
           </div>
 
-          {/* Privacy Toggle for Admin */}
-          {isCommunityAdmin && (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8, fontSize: 12,
-              padding: 8, background: "rgba(0,212,255,0.05)", borderRadius: 8
-            }}>
-              <span style={{ color: "rgba(255,255,255,0.6)" }}>
-                {activeCommunity.is_private ? "🔒 Private" : "🌐 Public"}
-              </span>
-              <button
-                onClick={async () => {
-                  const newPrivacy = !activeCommunity.is_private
-                  await supabase.from("communities")
-                    .update({ is_private: newPrivacy })
-                    .eq("id", activeCommunity.id)
-                  setActiveCommunity({ ...activeCommunity, is_private: newPrivacy })
-                }}
-                style={{
-                  marginLeft: "auto", padding: "4px 12px",
-                  background: "rgba(0,212,255,0.2)", border: "1px solid rgba(0,212,255,0.3)",
-                  color: "#00D4FF", borderRadius: 6, fontSize: 11, fontWeight: 700,
-                  cursor: "pointer"
-                }}>
-                Toggle
-              </button>
-            </div>
-          )}
+          {/* Link Button */}
+          <button onClick={() => {
+            if (!myMemberships[activeCommunity.id]) {
+              linkCommunity(activeCommunity.id)
+            }
+          }}
+            disabled={loading}
+            className="w-full py-2 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-lg font-bold text-sm mb-3"
+          >
+            {myMemberships[activeCommunity.id] === "accepted" ? "✓ Linked" : "Link"}
+          </button>
         </div>
 
         {/* Tabs */}
         <div className="flex-shrink-0 flex border-b border-zinc-800">
           {(["feed", "about"] as const).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-3 text-sm font-bold capitalize transition-colors ${
-                activeTab === tab ? "text-cyan-400 border-b-2 border-cyan-400" : "text-zinc-500"
+              className={`flex-1 py-3 text-sm font-bold transition-colors ${
+                activeTab === tab ? "text-white border-b-2 border-cyan-400" : "text-zinc-500"
               }`}>
               {tab === "feed" ? "Feed" : "About"}
             </button>
           ))}
         </div>
 
-        {/* Feed Tab */}
+        {/* Content */}
         {activeTab === "feed" && (
           <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-            {/* Messages */}
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 pb-24">
               {messages.length === 0 && (
                 <div style={{ textAlign: "center", padding: "40px 20px" }}>
                   <p style={{ fontSize: 32, marginBottom: 8 }}>💬</p>
                   <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>No posts yet</p>
-                  <p style={{ color: "rgba(255,255,255,0.2)", fontSize: 11, marginTop: 4 }}>
-                    Be the first to post in this community
-                  </p>
                 </div>
               )}
 
@@ -396,31 +337,32 @@ export default function Communities() {
                 <div key={msg.id} style={{
                   background: "rgba(255,255,255,0.04)",
                   border: "1px solid rgba(0,212,255,0.15)",
-                  borderRadius: 12, padding: 12, overflow: "hidden"
+                  borderRadius: 12, padding: 12
                 }}>
-                  {/* Header with PINNED */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                    {msg.is_announcement && (
-                      <div style={{
-                        background: "rgba(0,212,255,0.15)",
-                        border: "1px solid rgba(0,212,255,0.3)",
-                        borderRadius: 6, padding: "2px 8px",
-                        display: "flex", alignItems: "center", gap: 4,
-                        fontSize: 10, fontWeight: 700, color: "#00D4FF"
-                      }}>
-                        📌 PINNED
-                      </div>
-                    )}
-                    <div style={{ flex: 1 }}></div>
-                    {msg.lp_earned && msg.lp_earned > 0 && (
-                      <span style={{ color: "#00D4FF", fontSize: 12, fontWeight: 700 }}>
-                        +{msg.lp_earned} LP
-                      </span>
-                    )}
-                  </div>
+                  {/* Pinned Badge */}
+                  {msg.is_announcement && (
+                    <div style={{
+                      background: "rgba(0,212,255,0.15)",
+                      border: "1px solid rgba(0,212,255,0.3)",
+                      borderRadius: 6, padding: "2px 8px",
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      fontSize: 10, fontWeight: 700, color: "#00D4FF", marginBottom: 8
+                    }}>
+                      📌 PINNED
+                    </div>
+                  )}
 
-                  {/* User info */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  {msg.lp_earned && msg.lp_earned > 0 && (
+                    <div style={{
+                      float: "right", color: "#00D4FF", fontSize: 11, fontWeight: 700,
+                      marginBottom: 8
+                    }}>
+                      +{msg.lp_earned} LP
+                    </div>
+                  )}
+
+                  {/* User Header */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, clear: "both" }}>
                     <div style={{
                       width: 32, height: 32, borderRadius: "50%",
                       background: "linear-gradient(135deg, #B400FF, #00D4FF)",
@@ -429,34 +371,23 @@ export default function Communities() {
                     }}>
                       {msg.sender.charAt(0).toUpperCase()}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ color: "#00D4FF", fontSize: 12, fontWeight: 700 }}>
-                          {msg.sender}
-                        </span>
-                        {isCommunityAdmin && msg.sender === activeCommunity.created_by && (
-                          <span style={{
-                            background: "rgba(0,212,255,0.2)",
-                            color: "#00D4FF", fontSize: 9, fontWeight: 800,
-                            padding: "2px 6px", borderRadius: 4
-                          }}>MOD</span>
-                        )}
-                      </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ color: "#00D4FF", fontSize: 12, fontWeight: 700 }}>
+                        {msg.sender}
+                      </p>
                       <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 10, marginTop: 2 }}>
                         {timeAgo(msg.created_at)}
                       </p>
                     </div>
                     {(isCommunityAdmin || msg.sender === user) && (
-                      <button
-                        onClick={() => deleteMessage(msg.id)}
+                      <button onClick={() => deleteMessage(msg.id)}
                         style={{
                           background: "rgba(255,0,0,0.15)",
                           border: "1px solid rgba(255,0,0,0.3)", borderRadius: "50%",
                           width: 24, height: 24, display: "flex", alignItems: "center",
                           justifyContent: "center", cursor: "pointer",
-                          fontSize: 11, color: "#f87171", flexShrink: 0
-                        }}
-                      >✕</button>
+                          fontSize: 11, color: "#f87171"
+                        }}>✕</button>
                     )}
                   </div>
 
@@ -474,35 +405,26 @@ export default function Communities() {
                   {msg.media_url && (
                     <div style={{
                       width: "100%", maxHeight: 200, borderRadius: 8, overflow: "hidden",
-                      marginBottom: 12, background: "rgba(0,0,0,0.3)"
+                      marginBottom: 12
                     }}>
-                      {msg.media_type === "video" && (
+                      {msg.media_type === "video" ? (
                         <video src={msg.media_url}
-                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
                           controls playsInline />
-                      )}
-                      {msg.media_type === "image" && (
+                      ) : (
                         <img src={msg.media_url}
-                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       )}
                     </div>
                   )}
 
-                  {/* Description */}
-                  {msg.message && msg.media_type === "text" && (
+                  {/* Message */}
+                  {msg.message && (
                     <p style={{
-                      color: "rgba(255,255,255,0.8)", fontSize: 13, lineHeight: 1.5,
-                      marginBottom: 12
+                      color: "rgba(255,255,255,0.7)", fontSize: 13, lineHeight: 1.5,
+                      marginBottom: 10
                     }}>
                       {msg.message}
-                    </p>
-                  )}
-                  {msg.message && msg.media_type !== "text" && msg.message.split('\n').length > 1 && (
-                    <p style={{
-                      color: "rgba(255,255,255,0.6)", fontSize: 12, lineHeight: 1.5,
-                      marginBottom: 12
-                    }}>
-                      {msg.message.split('\n').slice(1).join('\n')}
                     </p>
                   )}
 
@@ -512,22 +434,16 @@ export default function Communities() {
                     color: "rgba(255,255,255,0.5)", paddingTop: 10,
                     borderTop: "1px solid rgba(255,255,255,0.05)"
                   }}>
-                    <span style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                      ❤️ 248
-                    </span>
-                    <span style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                      💬 42
-                    </span>
-                    <span style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                      🔗 Share
-                    </span>
+                    <span style={{ cursor: "pointer" }}>❤️ 248</span>
+                    <span style={{ cursor: "pointer" }}>💬 42</span>
+                    <span style={{ cursor: "pointer" }}>🔗 Share</span>
                   </div>
                 </div>
               ))}
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Chat Input at Bottom */}
+            {/* Chat Input */}
             <div className="flex-shrink-0 fixed bottom-16 left-0 right-0 px-4 py-3 bg-black border-t border-zinc-800">
               <div style={{
                 background: "rgba(255,255,255,0.04)",
@@ -535,8 +451,8 @@ export default function Communities() {
                 borderRadius: 16, padding: "8px 12px",
                 display: "flex", alignItems: "center", gap: 8
               }}>
-                <label style={{ flexShrink: 0, cursor: "pointer" }}>
-                  <span style={{ fontSize: 18 }}>{userUploadingMedia ? "⏳" : "📎"}</span>
+                <label style={{ flexShrink: 0, cursor: "pointer", fontSize: 18 }}>
+                  {userUploadingMedia ? "⏳" : "📎"}
                   <input type="file" accept="image/*,video/*"
                     className="hidden" disabled={userUploadingMedia}
                     onChange={(e) => {
@@ -561,9 +477,9 @@ export default function Communities() {
                     background: userMessageText.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "rgba(255,255,255,0.08)",
                     border: "none", borderRadius: 10,
                     color: userMessageText.trim() ? "white" : "rgba(255,255,255,0.3)",
-                    fontWeight: 700, fontSize: 12, cursor: userMessageText.trim() ? "pointer" : "default"
+                    fontWeight: 700, fontSize: 12, cursor: "pointer"
                   }}>
-                  {userSendingMessage ? "..." : "Send"}
+                  Send
                 </button>
               </div>
             </div>
@@ -573,64 +489,17 @@ export default function Communities() {
         {/* About Tab */}
         {activeTab === "about" && (
           <div className="flex-1 overflow-y-auto px-4 py-4 pb-20">
-            {/* Background Image Upload for Admin */}
-            {isCommunityAdmin && (
-              <div className="mb-6">
-                <label style={{
-                  display: "block", marginBottom: 8, fontSize: 12, fontWeight: 700, color: "#00D4FF"
-                }}>
-                  Community Background
-                </label>
-                <div style={{
-                  border: "2px dashed rgba(0,212,255,0.3)",
-                  borderRadius: 12, padding: 16, textAlign: "center", cursor: "pointer"
-                }}>
-                  <input type="file" accept="image/*"
-                    className="hidden" id="bg-upload"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (file && activeCommunity) {
-                        const ext = file.name.split(".").pop()
-                        const fileName = `community-bg-${activeCommunity.id}.${ext}`
-                        const { error } = await supabase.storage.from("proof").upload(fileName, file, { upsert: true })
-                        if (!error) {
-                          const { data } = supabase.storage.from("proof").getPublicUrl(fileName)
-                          await supabase.from("communities").update({ background_image: data.publicUrl }).eq("id", activeCommunity.id)
-                          setActiveCommunity({ ...activeCommunity, background_image: data.publicUrl })
-                        }
-                      }
-                    }} />
-                  <label htmlFor="bg-upload" style={{ cursor: "pointer", display: "block" }}>
-                    <p style={{ fontSize: 20, marginBottom: 6 }}>📸</p>
-                    <p style={{ fontSize: 12, color: "#00D4FF", fontWeight: 700 }}>
-                      Click to upload background
-                    </p>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* About Description */}
             {activeCommunity.description && (
               <div className="mb-6">
                 <h3 className="text-sm font-bold text-cyan-400 mb-2">About</h3>
-                <p className="text-zinc-300 text-sm leading-relaxed">{activeCommunity.description}</p>
+                <p className="text-zinc-300 text-sm">{activeCommunity.description}</p>
               </div>
             )}
 
-            {isCommunityAdmin && !activeCommunity.description && (
-              <div className="mb-6 p-4 bg-rgba(0,212,255,0.05) border border-rgba(0,212,255,0.2) rounded-lg">
-                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 8 }}>
-                  No description yet. Contact admin to add one.
-                </p>
-              </div>
-            )}
-
-            {/* Members */}
             <div className="mb-6">
               <h3 className="text-sm font-bold text-cyan-400 mb-3">Members ({members.length})</h3>
               <div className="space-y-2">
-                {members.slice(0, 10).map((m, i) => (
+                {members.map((m, i) => (
                   <div key={`${m.user_name}-${i}`} className="flex items-center gap-3 bg-zinc-900/30 px-3 py-2.5 rounded-lg">
                     <div style={{
                       width: 32, height: 32, borderRadius: "50%",
@@ -640,17 +509,11 @@ export default function Communities() {
                     }}>
                       {m.user_name.charAt(0).toUpperCase()}
                     </div>
-                    <div style={{ flex: 1 }}>
+                    <div>
                       <p className="font-semibold text-xs text-white">{m.user_name}</p>
-                      {m.user_name === user && (
-                        <p className="text-cyan-400 text-xs">You</p>
-                      )}
                     </div>
                   </div>
                 ))}
-                {members.length > 10 && (
-                  <p className="text-zinc-500 text-xs text-center py-2">+{members.length - 10} more members</p>
-                )}
               </div>
             </div>
           </div>
@@ -661,6 +524,7 @@ export default function Communities() {
     )
   }
 
+  // LIST VIEW
   return (
     <div className="flex flex-col h-full bg-black text-white overflow-hidden">
       <main className="flex flex-col flex-1 overflow-y-auto pb-4">
@@ -669,8 +533,28 @@ export default function Communities() {
             className="text-zinc-500 text-sm mb-3 flex items-center gap-1">
             ← Back
           </button>
-          <h1 className="text-2xl font-bold text-cyan-400">Communities</h1>
-          <p className="text-zinc-500 text-xs mt-0.5">Link with your team and earn LP together</p>
+          <h1 className="text-2xl font-bold text-cyan-400">Community</h1>
+        </div>
+
+        <div className="px-4 pb-4">
+          <div style={{
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 16, padding: "10px 14px",
+            display: "flex", alignItems: "center", gap: 8,
+            marginBottom: 16
+          }}>
+            <span style={{ fontSize: 14 }}>🔍</span>
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search communities..."
+              style={{
+                flex: 1, background: "transparent", border: "none",
+                color: "white", fontSize: 13, outline: "none"
+              }}
+            />
+          </div>
         </div>
 
         <div className="p-4 space-y-4">
@@ -678,9 +562,6 @@ export default function Communities() {
             <div style={{ textAlign: "center", padding: "40px 0" }}>
               <p style={{ fontSize: 32, marginBottom: 8 }}>👥</p>
               <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>No communities yet</p>
-              <p style={{ color: "rgba(255,255,255,0.2)", fontSize: 11, marginTop: 4 }}>
-                Ask your institution to create one
-              </p>
             </div>
           )}
 
@@ -694,82 +575,99 @@ export default function Communities() {
                 border: "1px solid rgba(255,255,255,0.07)",
                 borderRadius: 16, overflow: "hidden"
               }}>
-                {/* Background Image */}
+                {/* Background */}
                 {community.background_image && (
                   <div style={{
-                    width: "100%", height: 140, position: "relative", overflow: "hidden",
-                    background: "linear-gradient(135deg, rgba(180,0,255,0.2), rgba(0,212,255,0.1))"
+                    width: "100%", height: 120,
+                    background: "linear-gradient(135deg, rgba(180,0,255,0.2), rgba(0,212,255,0.1))",
+                    overflow: "hidden"
                   }}>
-                    <img src={community.background_image} alt={community.name}
+                    <img src={community.background_image} alt=""
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                       onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }} />
                   </div>
                 )}
 
                 <div style={{ padding: 16 }}>
-                  {/* Avatar and Name */}
-                  <div className="flex justify-between items-start mb-3">
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flex: 1 }}>
-                      <div style={{
-                        width: 48, height: 48, borderRadius: 12,
-                        background: "linear-gradient(135deg, #B400FF, #00D4FF)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 18, fontWeight: 900, color: "white", flexShrink: 0
-                      }}>
-                        {community.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <h3 className="font-bold text-white text-base truncate">{community.name}</h3>
-                        <p className="text-zinc-500 text-xs mt-0.5">{community.institution}</p>
-                      </div>
+                  {/* Avatar and Title */}
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
+                    <div style={{
+                      width: 48, height: 48, borderRadius: 12,
+                      background: "linear-gradient(135deg, #B400FF, #00D4FF)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 18, fontWeight: 900, color: "white", flexShrink: 0
+                    }}>
+                      {community.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <h3 style={{ fontWeight: "bold", color: "white", fontSize: 15, marginBottom: 2 }}>
+                        {community.name}
+                      </h3>
+                      <p style={{ color: "#00D4FF", fontSize: 12, fontWeight: 600 }}>
+                        {community.institution}
+                      </p>
                     </div>
                   </div>
 
                   {/* Description */}
                   {community.description && (
-                    <p className="text-zinc-400 text-xs mb-3 line-clamp-2">{community.description}</p>
+                    <p style={{
+                      color: "rgba(255,255,255,0.6)", fontSize: 12, lineHeight: 1.4,
+                      marginBottom: 10
+                    }}>
+                      {community.description}
+                    </p>
                   )}
 
-                  {/* Stats Bar - Single row */}
+                  {/* Stats */}
                   <div style={{
                     background: "rgba(255,255,255,0.04)",
                     border: "1px solid rgba(255,255,255,0.08)",
                     borderRadius: 10, padding: "8px 10px",
                     display: "flex", alignItems: "center", justifyContent: "space-between",
-                    fontSize: 11, color: "rgba(255,255,255,0.6)", marginBottom: 12
+                    fontSize: 11, color: "rgba(255,255,255,0.6)", marginBottom: 10
                   }}>
                     <span><strong style={{ color: "#00D4FF" }}>{community.link_count}</strong> links</span>
                     <span style={{ color: "rgba(255,255,255,0.2)" }}>•</span>
                     <span><strong style={{ color: "#B400FF" }}>{community.post_count}</strong> posts</span>
                     <span style={{ color: "rgba(255,255,255,0.2)" }}>•</span>
-                    <span><strong style={{ color: "#FFA500" }}>{community.total_lp}k</strong> LP</span>
+                    <span><strong style={{ color: "#FFA500" }}>{Math.round(community.total_lp / 1000)}k</strong> LP</span>
                   </div>
 
-                  {/* Link Button */}
-                  <button onClick={() => openCommunity(community)}
-                    disabled={loading || !isLinked}
-                    style={{
-                      width: "100%", padding: "10px 12px",
-                      background: isLinked 
-                        ? "linear-gradient(135deg, #B400FF, #00D4FF)" 
-                        : "rgba(255,255,255,0.08)",
-                      border: "none", borderRadius: 10,
-                      color: isLinked ? "white" : "rgba(255,255,255,0.3)",
-                      fontSize: 13, fontWeight: 700, cursor: isLinked ? "pointer" : "default"
-                    }}>
-                    {isLinked ? "Open Community" : !memberStatus ? "Link to Join" : "Pending"}
-                  </button>
-
-                  {!memberStatus && (
+                  {/* Action Button */}
+                  {!isLinked && !memberStatus && (
                     <button onClick={() => linkCommunity(community.id)} disabled={loading}
                       style={{
-                        width: "100%", padding: "10px 12px", marginTop: 8,
+                        width: "100%", padding: "10px 12px",
                         background: "#00D4FF",
                         border: "none", borderRadius: 10,
                         color: "black",
                         fontSize: 13, fontWeight: 700, cursor: "pointer"
                       }}>
                       🔗 Link
+                    </button>
+                  )}
+                  {isLinked && (
+                    <button onClick={() => openCommunity(community)}
+                      style={{
+                        width: "100%", padding: "10px 12px",
+                        background: "linear-gradient(135deg, #B400FF, #00D4FF)",
+                        border: "none", borderRadius: 10,
+                        color: "white",
+                        fontSize: 13, fontWeight: 700, cursor: "pointer"
+                      }}>
+                      Open Community
+                    </button>
+                  )}
+                  {memberStatus && memberStatus !== "accepted" && (
+                    <button disabled style={{
+                      width: "100%", padding: "10px 12px",
+                      background: "rgba(255,255,255,0.08)",
+                      border: "none", borderRadius: 10,
+                      color: "rgba(255,255,255,0.3)",
+                      fontSize: 13, fontWeight: 700
+                    }}>
+                      {memberStatus === "pending" ? "⏳ Pending" : "✓ Linked"}
                     </button>
                   )}
                 </div>
