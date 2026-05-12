@@ -59,7 +59,6 @@ export default function Hub() {
           if (!vid) return
           
           if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
-            vid.muted = true
             vid.play().catch(() => console.log("Autoplay prevented"))
           } else {
             vid.pause()
@@ -82,7 +81,6 @@ export default function Hub() {
     // Auto-play first video on mount
     const firstVid = videoRefs.current[posts[0].id]
     if (firstVid && firstVid.paused) {
-      firstVid.muted = true
       firstVid.play().catch(() => {})
     }
   }, [posts])
@@ -148,17 +146,26 @@ export default function Hub() {
         })
     }
 
-    // Update local state
     setTried(prev => [...prev, post.id])
     setPosts(prev => prev.map(p =>
       p.id === post.id ? { ...p, tried_count: p.tried_count + 1 } : p
     ))
 
-    // Navigate immediately to that specific session
     if (post.session_id) {
       router.push(`/sessions?session=${post.session_id}`)
     } else {
       router.push("/sessions")
+    }
+  }
+
+  function toggleVideoPlay(postId: string) {
+    const vid = videoRefs.current[postId]
+    if (!vid) return
+    if (vid.paused) {
+      vid.muted = false
+      vid.play().catch(() => {})
+    } else {
+      vid.pause()
     }
   }
 
@@ -243,9 +250,11 @@ export default function Hub() {
             key={post.id}
             ref={(el) => { cardRefs.current[post.id] = el }}
             data-post-id={post.id}
+            onClick={() => toggleVideoPlay(post.id)}
             style={{
               height: "100%", scrollSnapAlign: "start", scrollSnapStop: "always",
-              position: "relative", overflow: "hidden", background: "#000"
+              position: "relative", overflow: "hidden", background: "#000",
+              cursor: "pointer"
             }}
           >
             {/* MEDIA */}
@@ -253,7 +262,7 @@ export default function Hub() {
               <video
                 ref={(el) => { videoRefs.current[post.id] = el }}
                 src={post.media_url}
-                loop muted playsInline
+                loop playsInline
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (
@@ -293,7 +302,7 @@ export default function Hub() {
               {/* Avatar + username */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                 <div
-                  onClick={() => router.push(`/user/${encodeURIComponent(post.user_name)}`)}
+                  onClick={(e) => { e.stopPropagation(); router.push(`/user/${encodeURIComponent(post.user_name)}`) }}
                   style={{
                     width: 34, height: 34, borderRadius: "50%",
                     background: "linear-gradient(135deg, #B400FF, #00D4FF)",
@@ -307,7 +316,7 @@ export default function Hub() {
                 </div>
                 <div>
                   <p
-                    onClick={() => router.push(`/user/${encodeURIComponent(post.user_name)}`)}
+                    onClick={(e) => { e.stopPropagation(); router.push(`/user/${encodeURIComponent(post.user_name)}`) }}
                     style={{ color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", lineHeight: 1.2 }}
                   >
                     {post.user_name}
@@ -328,7 +337,7 @@ export default function Hub() {
               {/* TRY IRL + TRIED COUNT */}
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <button
-                  onClick={() => handleTryIRL(post)}
+                  onClick={(e) => { e.stopPropagation(); handleTryIRL(post) }}
                   disabled={tried.includes(post.id)}
                   style={{
                     flex: "0 0 65%", padding: "14px 0", borderRadius: 9999,

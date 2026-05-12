@@ -33,6 +33,7 @@ type Message = {
   id: string
   community_id: string
   sender: string
+  title?: string
   message: string
   media_url: string | null
   media_type: string
@@ -59,7 +60,8 @@ export default function Communities() {
   const [isCommunityAdmin, setIsCommunityAdmin] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
-  const [userMessageText, setUserMessageText] = useState("")
+  const [postTitle, setPostTitle] = useState("")
+  const [postDetails, setPostDetails] = useState("")
   const [userSendingMessage, setUserSendingMessage] = useState(false)
   const [userUploadingMedia, setUserUploadingMedia] = useState(false)
 
@@ -209,14 +211,16 @@ export default function Communities() {
   }
 
   async function sendUserMessage(communityId: string) {
-    const trimmed = userMessageText.trim()
-    if (!trimmed) return
+    const title = postTitle.trim()
+    const details = postDetails.trim()
+    if (!title && !details) return
     setUserSendingMessage(true)
     const { data, error } = await supabase.from("community_messages")
       .insert({
         community_id: communityId,
         sender: user,
-        message: trimmed,
+        title: title || null,
+        message: details,
         media_type: "text",
         is_announcement: false,
         is_pinned: false
@@ -233,7 +237,8 @@ export default function Communities() {
     if (data) {
       setMessages(prev => [...prev, data as Message])
     }
-    setUserMessageText("")
+    setPostTitle("")
+    setPostDetails("")
     setUserSendingMessage(false)
   }
 
@@ -249,7 +254,8 @@ export default function Communities() {
       .insert({
         community_id: communityId,
         sender: user,
-        message: userMessageText.trim() || "",
+        title: postTitle.trim() || null,
+        message: postDetails.trim() || "",
         media_url: urlData.publicUrl,
         media_type: isVideo ? "video" : "image",
         is_announcement: false,
@@ -267,7 +273,8 @@ export default function Communities() {
     if (data) {
       setMessages(prev => [...prev, data as Message])
     }
-    setUserMessageText("")
+    setPostTitle("")
+    setPostDetails("")
     setUserUploadingMedia(false)
   }
 
@@ -367,7 +374,48 @@ export default function Communities() {
         {/* Content */}
         {activeTab === "feed" && (
           <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 pb-24">
+            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4 pb-6">
+              {myMemberships[activeCommunity.id] === "accepted" && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-4 space-y-4">
+                  <div>
+                    <p className="text-sm font-bold text-white">Create Post</p>
+                    <p className="text-xs text-zinc-500">Write a title and some details for your community post</p>
+                  </div>
+                  <input
+                    value={postTitle}
+                    onChange={e => setPostTitle(e.target.value)}
+                    placeholder="Post title..."
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-3xl px-4 py-3 text-white placeholder:text-zinc-500 text-sm outline-none"
+                  />
+                  <textarea
+                    value={postDetails}
+                    onChange={e => setPostDetails(e.target.value)}
+                    placeholder="Add some details..."
+                    rows={4}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-3xl px-4 py-3 text-white placeholder:text-zinc-500 text-sm outline-none resize-none"
+                  />
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
+                      <span className="text-lg">{userUploadingMedia ? "⏳" : "📎"}</span>
+                      <input type="file" accept="image/*,video/*" className="hidden" disabled={userUploadingMedia}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file && activeCommunity) sendUserMedia(activeCommunity.id, file)
+                        }} />
+                      Attach media
+                    </label>
+                    <button
+                      onClick={() => activeCommunity && sendUserMessage(activeCommunity.id)}
+                      disabled={userSendingMessage || (!postTitle.trim() && !postDetails.trim())}
+                      className="rounded-full px-5 py-3 text-sm font-bold text-white"
+                      style={{ background: "linear-gradient(135deg, #8b5cf6, #00d9ff)" }}
+                    >
+                      {userSendingMessage ? "Posting..." : "Post"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {messages.length === 0 && (
                 <div style={{ textAlign: "center", padding: "40px 20px" }}>
                   <p style={{ fontSize: 32, marginBottom: 8 }}>💬</p>
@@ -434,12 +482,12 @@ export default function Communities() {
                   </div>
 
                   {/* Title */}
-                  {msg.message && msg.media_type !== "text" && (
+                  {(msg.title || (msg.message && msg.media_type !== "text")) && (
                     <h4 style={{
-                      color: "white", fontSize: 14, fontWeight: 700,
-                      marginBottom: 8, lineHeight: 1.4
+                      color: "white", fontSize: 16, fontWeight: 800,
+                      marginBottom: 10, lineHeight: 1.3
                     }}>
-                      {msg.message.split('\n')[0]}
+                      {msg.title || msg.message.split('\n')[0]}
                     </h4>
                   )}
 
@@ -463,7 +511,7 @@ export default function Communities() {
                   {/* Message */}
                   {msg.message && (
                     <p style={{
-                      color: "rgba(255,255,255,0.7)", fontSize: 13, lineHeight: 1.5,
+                      color: "rgba(255,255,255,0.75)", fontSize: 14, lineHeight: 1.6,
                       marginBottom: 10
                     }}>
                       {msg.message}
@@ -476,46 +524,6 @@ export default function Communities() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Chat Input */}
-            <div className="flex-shrink-0 fixed bottom-16 left-0 right-0 px-4 py-3 bg-black border-t border-zinc-800">
-              <div style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                borderRadius: 16, padding: "8px 12px",
-                display: "flex", alignItems: "center", gap: 8
-              }}>
-                <label style={{ flexShrink: 0, cursor: "pointer", fontSize: 18 }}>
-                  {userUploadingMedia ? "⏳" : "📎"}
-                  <input type="file" accept="image/*,video/*"
-                    className="hidden" disabled={userUploadingMedia}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file && activeCommunity) sendUserMedia(activeCommunity.id, file)
-                    }} />
-                </label>
-                <input
-                  value={userMessageText}
-                  onChange={e => setUserMessageText(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && activeCommunity) sendUserMessage(activeCommunity.id) }}
-                  placeholder="Send a message..."
-                  style={{
-                    flex: 1, background: "transparent", border: "none",
-                    color: "white", fontSize: 13, outline: "none"
-                  }}
-                />
-                <button onClick={() => activeCommunity && sendUserMessage(activeCommunity.id)}
-                  disabled={userSendingMessage || !userMessageText.trim()}
-                  style={{
-                    flexShrink: 0, padding: "6px 14px",
-                    background: userMessageText.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "rgba(255,255,255,0.08)",
-                    border: "none", borderRadius: 10,
-                    color: userMessageText.trim() ? "white" : "rgba(255,255,255,0.3)",
-                    fontWeight: 700, fontSize: 12, cursor: "pointer"
-                  }}>
-                  Send
-                </button>
-              </div>
-            </div>
           </div>
         )}
 

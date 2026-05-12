@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { getUser, getSchool, logout } from "@/lib/auth"
@@ -29,10 +29,10 @@ export default function AdminDashboard() {
   const [newCommunity, setNewCommunity] = useState({ name: "", description: "", is_private: false })
   const [activeCommunityChat, setActiveCommunityChat] = useState<any | null>(null)
   const [communityMessages, setCommunityMessages] = useState<any[]>([])
-  const [messageText, setMessageText] = useState("")
+  const [communityPostTitle, setCommunityPostTitle] = useState("")
+  const [communityPostDetails, setCommunityPostDetails] = useState("")
   const [sendingMessage, setSendingMessage] = useState(false)
   const [uploadingMedia, setUploadingMedia] = useState(false)
-  const [postingAsMod, setPostingAsMod] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   const [rewards, setRewards] = useState<any[]>([])
@@ -221,12 +221,18 @@ export default function AdminDashboard() {
   }
 
   async function sendMessage(communityId: string) {
-    const trimmed = messageText.trim()
-    if (!trimmed) return
+    const title = communityPostTitle.trim()
+    const details = communityPostDetails.trim()
+    if (!title && !details) return
     setSendingMessage(true)
     const { data, error } = await supabase.from("community_messages")
       .insert({ community_id: communityId, sender: ADMIN,
-        message: trimmed, media_type: "text" })
+        title: title || null,
+        message: details,
+        media_type: "text",
+        is_announcement: false,
+        is_pinned: false
+      })
       .select("*")
       .single()
 
@@ -239,7 +245,8 @@ export default function AdminDashboard() {
     if (data) {
       setCommunityMessages(prev => [...prev, data])
     }
-    setMessageText("")
+    setCommunityPostTitle("")
+    setCommunityPostDetails("")
     setSendingMessage(false)
   }
 
@@ -253,9 +260,13 @@ export default function AdminDashboard() {
     const isVideo = file.type.startsWith("video")
     const { data, error } = await supabase.from("community_messages")
       .insert({ community_id: communityId, sender: ADMIN,
-        message: messageText.trim() || "",
+        title: communityPostTitle.trim() || null,
+        message: communityPostDetails.trim() || "",
         media_url: urlData.publicUrl,
-        media_type: isVideo ? "video" : "image" })
+        media_type: isVideo ? "video" : "image",
+        is_announcement: false,
+        is_pinned: false
+      })
       .select("*")
       .single()
 
@@ -268,7 +279,8 @@ export default function AdminDashboard() {
     if (data) {
       setCommunityMessages(prev => [...prev, data])
     }
-    setMessageText("")
+    setCommunityPostTitle("")
+    setCommunityPostDetails("")
     setUploadingMedia(false)
   }
 
@@ -456,59 +468,101 @@ export default function AdminDashboard() {
           <button onClick={() => setActiveCommunityChat(null)}
             className="text-zinc-400 hover:text-white text-sm">← Back</button>
           <div>
-            <h1 className="text-lg font-bold text-cyan-400">{activeCommunityChat.name} — Announcements</h1>
-            <p className="text-zinc-500 text-xs">Sending as {ADMIN} (Admin)</p>
+            <h1 className="text-lg font-bold text-white">{activeCommunityChat.name}</h1>
+            <p className="text-zinc-500 text-xs">Community</p>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 max-w-2xl mx-auto w-full">
-          {communityMessages.length === 0 && (
-            <div className="text-center py-16 text-zinc-600">
-              <p className="text-4xl mb-3">💬</p>
-              <p>No messages yet. Send the first one.</p>
-            </div>
-          )}
-          {communityMessages.map(msg => (
-            <div key={msg.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-xs font-bold">
-                  {msg.sender.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-cyan-400 text-sm font-bold">{msg.sender}</span>
-                <span className="bg-teal-500/20 border border-teal-500/30 text-teal-300 text-[9px] font-bold px-2 py-0.5 rounded-full">{postingAsMod ? "MOD" : "ADMIN"}</span>
-                <span className="text-zinc-600 text-xs ml-auto">{timeAgo(msg.created_at)}</span>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 max-w-2xl mx-auto w-full">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden">
+            <div className="grid grid-cols-3 divide-x divide-zinc-800 text-center bg-zinc-950/80 p-5">
+              <div>
+                <p className="text-cyan-400 text-sm font-bold">{activeCommunityChat.link_count || 0}</p>
+                <p className="text-zinc-500 text-[11px] mt-1">Links</p>
               </div>
-              {msg.media_type === "video" && msg.media_url && (
-                <video src={msg.media_url} controls className="w-full max-h-64 rounded-xl mb-2 object-cover" />
-              )}
-              {msg.media_type === "image" && msg.media_url && (
-                <img src={msg.media_url} className="w-full max-h-64 rounded-xl mb-2 object-cover" />
-              )}
-              {msg.message && <p className="text-zinc-200 text-sm">{msg.message}</p>}
+              <div>
+                <p className="text-white text-sm font-bold">{activeCommunityChat.post_count || 0}</p>
+                <p className="text-zinc-500 text-[11px] mt-1">Posts</p>
+              </div>
+              <div>
+                <p className="text-amber-400 text-sm font-bold">{activeCommunityChat.total_lp ? Math.round(activeCommunityChat.total_lp / 1000) : 0}k</p>
+                <p className="text-zinc-500 text-[11px] mt-1">Total LP</p>
+              </div>
             </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-        <div className="border-t border-zinc-800 p-4 max-w-2xl mx-auto w-full flex-shrink-0 space-y-3">
-          <button type="button" onClick={() => setPostingAsMod(prev => !prev)}
-            className="w-full rounded-2xl bg-cyan-500/10 border border-cyan-500/20 px-4 py-3 text-sm font-semibold text-cyan-200 text-left">
-            Posting as {postingAsMod ? "Mod" : "Admin"} — tap to switch
-          </button>
-          <div className="flex gap-3 items-center bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3">
-            <label className="cursor-pointer text-zinc-400 hover:text-white flex-shrink-0">
-              <span className="text-xl">{uploadingMedia ? "⏳" : "📎"}</span>
-              <input type="file" accept="image/*,video/*" className="hidden" disabled={uploadingMedia}
-                onChange={e => { const f = e.target.files?.[0]; if (f) sendMedia(activeCommunityChat.id, f) }} />
-            </label>
-            <input value={messageText} onChange={e => setMessageText(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") sendMessage(activeCommunityChat.id) }}
-              placeholder="Post an announcement…"
-              className="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-zinc-600" />
-            <button onClick={() => sendMessage(activeCommunityChat.id)}
-              disabled={sendingMessage || !messageText.trim()}
-              className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-30"
-              style={{ background: messageText.trim() ? "linear-gradient(135deg, #B400FF, #00D4FF)" : "#27272a", color: "white" }}>
-              {sendingMessage ? "..." : "Send"}
-            </button>
+          </div>
+
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 space-y-4">
+            <div>
+              <p className="text-sm font-bold text-white">Create Post</p>
+              <p className="text-xs text-zinc-500 mt-1">Post as Admin</p>
+            </div>
+            <input
+              value={communityPostTitle}
+              onChange={e => setCommunityPostTitle(e.target.value)}
+              placeholder="Post title..."
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-3xl px-4 py-4 text-white placeholder:text-zinc-500 text-sm outline-none"
+            />
+            <textarea
+              value={communityPostDetails}
+              onChange={e => setCommunityPostDetails(e.target.value)}
+              placeholder="Add some details..."
+              rows={4}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-3xl px-4 py-4 text-white placeholder:text-zinc-500 text-sm outline-none resize-none"
+            />
+            <div className="flex items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
+                <span className="text-xl">{uploadingMedia ? "⏳" : "📎"}</span>
+                <input type="file" accept="image/*,video/*" className="hidden" disabled={uploadingMedia}
+                  onChange={e => { const file = e.target.files?.[0]; if (file) sendMedia(activeCommunityChat.id, file) }} />
+                Attach media
+              </label>
+              <button
+                onClick={() => sendMessage(activeCommunityChat.id)}
+                disabled={sendingMessage || (!communityPostTitle.trim() && !communityPostDetails.trim())}
+                className="rounded-full px-6 py-3 text-sm font-bold text-white"
+                style={{ background: "linear-gradient(135deg, #8b5cf6, #00d9ff)" }}
+              >
+                {sendingMessage ? "Posting..." : "Post"}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {communityMessages.length === 0 && (
+              <div className="text-center py-16 text-zinc-600">
+                <p className="text-4xl mb-3">💬</p>
+                <p>No posts yet. Create the first one.</p>
+              </div>
+            )}
+            {communityMessages.map(msg => (
+              <div key={msg.id} className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-lg font-black text-white">
+                    {msg.sender.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                      <span className="text-cyan-300 text-sm font-bold">{msg.sender}</span>
+                      <span className="bg-teal-500/20 border border-teal-500/30 text-teal-300 text-[10px] font-bold px-2 py-1 rounded-full">ADMIN</span>
+                      <span className="text-zinc-500 text-[11px] ml-auto">{timeAgo(msg.created_at)}</span>
+                    </div>
+                    {msg.title && (
+                      <h3 className="text-white text-base font-bold leading-tight mb-2">{msg.title}</h3>
+                    )}
+                    {msg.message && (
+                      <p className="text-zinc-300 text-sm leading-6">{msg.message}</p>
+                    )}
+                    {msg.media_type === "video" && msg.media_url && (
+                      <video src={msg.media_url} controls className="w-full rounded-3xl mt-4 max-h-72 object-cover" />
+                    )}
+                    {msg.media_type === "image" && msg.media_url && (
+                      <img src={msg.media_url} className="w-full rounded-3xl mt-4 max-h-72 object-cover" />
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
           </div>
         </div>
       </div>
