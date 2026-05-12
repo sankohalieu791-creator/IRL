@@ -49,7 +49,11 @@ export default function Rewards() {
 
     const { data: rewardsData } = await supabase
       .from("rewards").select("*").order("points_required", { ascending: true }).limit(25)
-    if (rewardsData) setRewards(rewardsData.filter((r) => r.active !== false))
+    if (rewardsData) setRewards(rewardsData.filter((r) =>
+      r.active !== false &&
+      r.business_name?.trim() &&
+      (r.reward_type !== "voucher" || (r.voucher_code && r.voucher_code.trim()))
+    ))
 
     const { data: claimedData } = await supabase
       .from("user_rewards").select("reward_id").eq("user_name", user)
@@ -220,60 +224,58 @@ export default function Rewards() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-black text-white">
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-4 pt-4 pb-24 space-y-8">
+          <div>
+            <h1 className="text-2xl font-bold text-cyan-400 mb-1">Rewards</h1>
+            <p className="text-zinc-500 text-xs mb-3">Earn status. Get recognised. Prove yourself IRL.</p>
 
-      <div className="flex-shrink-0 px-4 pt-4 pb-3">
-        <h1 className="text-2xl font-bold text-cyan-400 mb-1">Rewards</h1>
-        <p className="text-zinc-500 text-xs mb-3">Earn status. Get recognised. Prove yourself IRL.</p>
-
-        {/* LP CARD */}
-        <div className="rounded-2xl bg-gradient-to-br from-purple-900/70 via-zinc-900/80 to-cyan-900/60 border border-cyan-500/25 p-2.5 text-center shadow-[0_20px_50px_rgba(0,0,0,0.25)] max-w-sm mx-auto">
-          <p className="text-zinc-400 text-[9px] uppercase tracking-[0.3em] mb-1.5">Your LinkPoints</p>
-          <span className="text-4xl font-black text-white block mb-0.5"
-            style={{ textShadow: "0 0 20px rgba(0,212,255,0.3)" }}>
-            {points}
-          </span>
-          <span className="text-cyan-400 font-bold text-base">LP</span>
-          <div className="w-12 h-[2px] bg-gradient-to-r from-purple-500 to-cyan-400 mx-auto my-2.5 rounded-full" />
-          <div className="grid grid-cols-3 gap-2 text-center mb-2.5">
-            <div>
-              <p className="text-sm font-bold text-green-400">{claimedCount}</p>
-              <p className="text-zinc-500 text-[10px] uppercase tracking-[0.15em]">Earned</p>
-            </div>
-            <div className="h-6 border-l border-r border-zinc-700" />
-            <div>
-              <p className="text-sm font-bold text-cyan-400">{sessionCount}</p>
-              <p className="text-zinc-500 text-[10px] uppercase tracking-[0.15em]">Sessions</p>
-            </div>
-            <div className="h-6 border-l border-zinc-700" />
-            <div>
-              <p className="text-sm font-bold text-purple-400">{rewards.length}</p>
-              <p className="text-zinc-500 text-[10px] uppercase tracking-[0.15em]">Rewards</p>
+            {/* LP CARD */}
+            <div className="rounded-[32px] bg-gradient-to-br from-slate-900 via-zinc-950 to-slate-900 border border-white/10 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.25)]">
+              <p className="text-zinc-400 text-[9px] uppercase tracking-[0.3em] mb-1.5">Your LinkPoints</p>
+              <span className="text-4xl font-black text-white block mb-0.5"
+                style={{ textShadow: "0 0 20px rgba(0,212,255,0.3)" }}>
+                {points}
+              </span>
+              <span className="text-cyan-400 font-bold text-base">LP</span>
+              <div className="w-12 h-[2px] bg-gradient-to-r from-purple-500 to-cyan-400 mx-auto my-2.5 rounded-full" />
+              <div className="grid grid-cols-3 gap-2 text-center mb-2.5">
+                <div>
+                  <p className="text-sm font-bold text-green-400">{claimedCount}</p>
+                  <p className="text-zinc-500 text-[10px] uppercase tracking-[0.15em]">Earned</p>
+                </div>
+                <div className="h-6 border-l border-zinc-700" />
+                <div>
+                  <p className="text-sm font-bold text-cyan-400">{sessionCount}</p>
+                  <p className="text-zinc-500 text-[10px] uppercase tracking-[0.15em]">Sessions</p>
+                </div>
+                <div className="h-6 border-l border-zinc-700" />
+                <div>
+                  <p className="text-sm font-bold text-purple-400">{rewards.length}</p>
+                  <p className="text-zinc-500 text-[10px] uppercase tracking-[0.15em]">Rewards</p>
+                </div>
+              </div>
+              {!loading && nextReward && (
+                <div>
+                  <div className="flex justify-between text-xs text-zinc-500 mb-1.5">
+                    <span>Next: <span className="text-white font-semibold">{nextReward.title}</span></span>
+                    <span>{points}/{nextReward.points_required} LP</span>
+                  </div>
+                  <div className="w-full bg-zinc-800 rounded-full h-2">
+                    <div className="bg-gradient-to-r from-purple-500 to-cyan-400 h-2 rounded-full transition-all duration-700"
+                      style={{ width: `${progressToNext}%` }} />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-          {!loading && nextReward && (
-            <div>
-              <div className="flex justify-between text-xs text-zinc-500 mb-1.5">
-                <span>Next: <span className="text-white font-semibold">{nextReward.title}</span></span>
-                <span>{points}/{nextReward.points_required} LP</span>
-              </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div className="bg-gradient-to-r from-purple-500 to-cyan-400 h-2 rounded-full transition-all duration-700"
-                  style={{ width: `${progressToNext}%` }} />
-              </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-4 mt-2">
+              <div className="h-px flex-1 bg-zinc-800" />
+              <p className="text-zinc-400 text-xs uppercase tracking-widest font-bold px-2">Achievements</p>
+              <div className="h-px flex-1 bg-zinc-800" />
             </div>
-          )}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-8">
-
-        {/* ── SECTION 1: SESSION ACHIEVEMENTS ── */}
-        <div>
-          <div className="flex items-center gap-2 mb-4 mt-2">
-            <div className="h-px flex-1 bg-zinc-800" />
-            <p className="text-zinc-400 text-xs uppercase tracking-widest font-bold px-2">Achievements</p>
-            <div className="h-px flex-1 bg-zinc-800" />
-          </div>
 
           <div className="space-y-4">
             {sessionAchievements.map((a) => {
@@ -387,80 +389,56 @@ export default function Rewards() {
                 const lpAway = Math.max(reward.points_required - points, 0)
 
                 return (
-                  <div key={reward.id} className="overflow-hidden rounded-[28px] border border-zinc-700/30 shadow-[0_20px_80px_rgba(0,0,0,0.2)] bg-gradient-to-br from-zinc-900/70 via-zinc-800/40 to-zinc-900/70">
-                    <div className="relative h-48">
+                  <div key={reward.id} className="overflow-hidden rounded-[32px] border border-white/10 shadow-[0_30px_90px_rgba(0,0,0,0.24)] bg-zinc-950">
+                    <div className="relative h-52 overflow-hidden">
                       {reward.image_url ? (
                         <img src={reward.image_url} alt={reward.title}
                           className="h-full w-full object-cover" />
                       ) : (
-                        <div className="h-full w-full bg-gradient-to-br from-purple-900/50 via-zinc-900/60 to-cyan-900/50" />
+                        <div className="h-full w-full bg-gradient-to-br from-slate-900 via-zinc-950 to-slate-800" />
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/85 via-zinc-900/50 to-transparent" />
-                      <div className="absolute top-4 left-4 rounded-full bg-black/40 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+                      <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/95 via-zinc-950/20 to-transparent" />
+                      <div className="absolute top-4 left-4 rounded-full bg-black/70 border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-white backdrop-blur-sm">
                         {reward.business_name || "Local Reward"}
                       </div>
-                      <div className="absolute top-4 right-4 rounded-full bg-white/10 border border-white/10 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+                      <div className="absolute top-4 right-4 rounded-full bg-white/10 border border-white/15 px-3 py-1.5 text-xs font-bold text-white">
                         {reward.points_required} LP
                       </div>
-                      {reward.reward_type === "voucher" && reward.voucher_code && (
-                        <div className="absolute left-4 bottom-16 rounded-2xl bg-white/10 border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-cyan-200 backdrop-blur-sm">
-                          Voucher code: {reward.voucher_code}
-                        </div>
-                      )}
-                      {reward.icon && (
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="relative text-[5.5rem] leading-none text-white opacity-30 transform rotate-6 drop-shadow-[0_20px_80px_rgba(0,0,0,0.24)]">
-                            <span className="absolute inset-0 text-white opacity-20 blur-[1px]">{reward.icon}</span>
-                            <span className="relative">{reward.icon}</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-5 pb-5">
-                      <div className="flex items-center justify-between gap-3 mb-2">
-                        <p className="text-zinc-400 text-xs uppercase tracking-[0.24em] font-semibold">
+                      <div className="absolute inset-x-4 bottom-4 rounded-[26px] bg-black/75 border border-white/10 p-4 backdrop-blur-md">
+                        <p className="text-[11px] uppercase tracking-[0.35em] text-cyan-300 mb-2">
                           {reward.reward_type ? reward.reward_type.toUpperCase() : "REWARD"}
                         </p>
-                        {isClaimed ? (
-                          <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-bold text-emerald-300 border border-emerald-500/20">
-                            CLAIMED
-                          </span>
-                        ) : unlocked ? (
-                          <span className="rounded-full bg-cyan-400/10 px-3 py-1 text-[11px] font-bold text-cyan-300 border border-cyan-400/20">
-                            READY
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-zinc-800/80 px-3 py-1 text-[11px] font-bold text-zinc-300 border border-zinc-700/60">
-                            {lpAway} LP AWAY
-                          </span>
+                        <h2 className="text-2xl font-bold text-white leading-tight mb-2">
+                          {reward.title}
+                        </h2>
+                        {reward.description && (
+                          <p className="text-zinc-300 text-sm leading-6 mb-4">
+                            {reward.description}
+                          </p>
                         )}
-                      </div>
-                      <h2 className="text-xl font-bold text-white leading-tight mb-2">
-                        {reward.title}
-                      </h2>
-                      {reward.description && (
-                        <p className="text-zinc-200 text-sm leading-6 mb-4">
-                          {reward.description}
-                        </p>
-                      )}
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <button
-                          onClick={() => claimReward(reward.id, reward.points_required)}
-                          disabled={!unlocked || isClaiming || isClaimed}
-                          className={`w-full sm:w-auto rounded-full px-6 py-3 text-sm font-bold transition ${
-                            isClaimed
-                              ? "bg-zinc-800 text-zinc-400 cursor-default"
-                              : unlocked
-                                ? "bg-gradient-to-r from-purple-500 to-cyan-400 text-zinc-950 shadow-[0_16px_40px_rgba(180,0,255,0.3)] hover:opacity-95"
-                                : "bg-white/5 text-zinc-400 cursor-not-allowed"
-                          }`}
-                        >
-                          {isClaiming ? "Claiming..." : isClaimed ? "Already claimed" : "Claim Now"}
-                        </button>
-                        <div className="flex items-center gap-2 text-xs text-zinc-400">
-                          <span className="rounded-full bg-white/5 px-2 py-1">{reward.business_name || "IRL Shop"}</span>
-                          <span className="text-zinc-500">•</span>
-                          <span>{reward.created_by ? `Posted by ${reward.created_by}` : "Posted by admin"}</span>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <button
+                            onClick={() => claimReward(reward.id, reward.points_required)}
+                            disabled={!unlocked || isClaiming || isClaimed}
+                            className={`w-full sm:w-auto rounded-full px-6 py-3 text-sm font-bold transition ${
+                              isClaimed
+                                ? "bg-zinc-800 text-zinc-400 cursor-default"
+                                : unlocked
+                                  ? "bg-gradient-to-r from-purple-500 to-cyan-400 text-zinc-950 shadow-[0_16px_40px_rgba(180,0,255,0.3)] hover:opacity-95"
+                                  : "bg-white/5 text-zinc-400 cursor-not-allowed"
+                            }`}
+                          >
+                            {isClaiming ? "Claiming..." : isClaimed ? "Already claimed" : "Claim Now"}
+                          </button>
+                          <div className="flex items-center gap-2 text-xs text-zinc-300">
+                            <span className="rounded-full bg-white/10 px-2 py-1">{reward.business_name || "IRL Shop"}</span>
+                            {reward.created_by && (
+                              <span className="text-zinc-500">•</span>
+                            )}
+                            {reward.created_by && (
+                              <span>{`Posted by ${reward.created_by}`}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -470,6 +448,7 @@ export default function Rewards() {
             )}
           </div>
         </div>
+      </div>
       </div>
 
       <BottomNav />

@@ -64,6 +64,7 @@ export default function Communities() {
   const [postDetails, setPostDetails] = useState("")
   const [userSendingMessage, setUserSendingMessage] = useState(false)
   const [userUploadingMedia, setUserUploadingMedia] = useState(false)
+  const [showCompose, setShowCompose] = useState(false)
 
   useEffect(() => {
     const u = getUser() || ""
@@ -143,15 +144,16 @@ export default function Communities() {
     setMyMemberships(map)
   }
 
-  async function linkCommunity(communityId: string) {
+  async function linkCommunity(communityId: string, isPrivate = false) {
     setLoading(true)
+    const status = isPrivate ? "pending" : "accepted"
     const { error } = await supabase
       .from("community_members")
-      .insert({ community_id: communityId, user_name: user, status: "accepted" })
+      .insert({ community_id: communityId, user_name: user, status })
     if (error) {
       alert(`Error: ${error.message}`)
     } else {
-      setMyMemberships(prev => ({ ...prev, [communityId]: "accepted" }))
+      setMyMemberships(prev => ({ ...prev, [communityId]: status }))
       await loadCommunities()
     }
     setLoading(false)
@@ -160,6 +162,7 @@ export default function Communities() {
   async function openCommunity(community: Community) {
     setActiveCommunity(community)
     setActiveTab("feed")
+    setShowCompose(false)
     loadMembers(community.id)
     loadCommunityLeaderboard(community.id)
     loadMessages(community.id)
@@ -349,13 +352,17 @@ export default function Communities() {
           {/* Link Button */}
           <button onClick={() => {
             if (!myMemberships[activeCommunity.id]) {
-              linkCommunity(activeCommunity.id)
+              linkCommunity(activeCommunity.id, !!activeCommunity.is_private)
             }
           }}
-            disabled={loading}
+            disabled={loading || myMemberships[activeCommunity.id] === "accepted"}
             className="w-full py-2 bg-gradient-to-r from-purple-500 to-cyan-400 rounded-lg font-bold text-sm mb-3"
           >
-            {myMemberships[activeCommunity.id] === "accepted" ? "✓ Linked" : "Link"}
+            {myMemberships[activeCommunity.id] === "accepted"
+              ? "✓ Linked"
+              : myMemberships[activeCommunity.id] === "pending"
+              ? "Requested"
+              : activeCommunity.is_private ? "🔒 Request" : "Link"}
           </button>
         </div>
 
@@ -374,12 +381,40 @@ export default function Communities() {
         {/* Content */}
         {activeTab === "feed" && (
           <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            {myMemberships[activeCommunity.id] === "accepted" && !showCompose && (
+              <div className="px-4 pt-3 pb-2">
+                <button
+                  onClick={() => setShowCompose(true)}
+                  className="w-full rounded-3xl bg-zinc-900/90 border border-zinc-800 px-4 py-3 flex items-center justify-between gap-3 text-left"
+                >
+                  <span className="text-zinc-400 text-sm">Share something...</span>
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-purple-500 to-cyan-400 text-white text-sm font-bold">+</span>
+                </button>
+              </div>
+            )}
+
+            {myMemberships[activeCommunity.id] === "pending" && (
+              <div className="px-4 pt-3 pb-2">
+                <button disabled className="w-full rounded-3xl bg-zinc-900/90 border border-zinc-800 px-4 py-3 text-left text-zinc-400">
+                  ⏳ Requested access
+                </button>
+              </div>
+            )}
+
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4 pb-6">
-              {myMemberships[activeCommunity.id] === "accepted" && (
+              {showCompose && myMemberships[activeCommunity.id] === "accepted" && (
                 <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-4 space-y-4">
-                  <div>
-                    <p className="text-sm font-bold text-white">Create Post</p>
-                    <p className="text-xs text-zinc-500">Write a title and some details for your community post</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-white">Create Post</p>
+                      <p className="text-xs text-zinc-500">Write a title and some details for your community post</p>
+                    </div>
+                    <button
+                      onClick={() => setShowCompose(false)}
+                      className="text-zinc-400 text-sm font-bold rounded-full bg-zinc-800 px-3 py-2"
+                    >
+                      Close
+                    </button>
                   </div>
                   <input
                     value={postTitle}
