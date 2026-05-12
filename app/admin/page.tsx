@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { getUser, getSchool, logout } from "@/lib/auth"
@@ -32,6 +32,8 @@ export default function AdminDashboard() {
   const [messageText, setMessageText] = useState("")
   const [sendingMessage, setSendingMessage] = useState(false)
   const [uploadingMedia, setUploadingMedia] = useState(false)
+  const [postingAsMod, setPostingAsMod] = useState(true)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   const [rewards, setRewards] = useState<any[]>([])
   const [newReward, setNewReward] = useState({
@@ -219,14 +221,25 @@ export default function AdminDashboard() {
   }
 
   async function sendMessage(communityId: string) {
-    if (!messageText.trim()) return
+    const trimmed = messageText.trim()
+    if (!trimmed) return
     setSendingMessage(true)
-    await supabase.from("community_messages").insert({
-      community_id: communityId, sender: ADMIN,
-      message: messageText.trim(), media_type: "text"
-    })
+    const { data, error } = await supabase.from("community_messages")
+      .insert({ community_id: communityId, sender: ADMIN,
+        message: trimmed, media_type: "text" })
+      .select("*")
+      .single()
+
+    if (error) {
+      alert(`Error: ${error.message}`)
+      setSendingMessage(false)
+      return
+    }
+
+    if (data) {
+      setCommunityMessages(prev => [...prev, data])
+    }
     setMessageText("")
-    await loadCommunityMessages(communityId)
     setSendingMessage(false)
   }
 
@@ -234,18 +247,28 @@ export default function AdminDashboard() {
     setUploadingMedia(true)
     const ext = file.name.split(".").pop()
     const fileName = `community-${communityId}-${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from("proof").upload(fileName, file, { upsert: true })
-    if (error) { alert(`Upload error: ${error.message}`); setUploadingMedia(false); return }
+    const { error: uploadError } = await supabase.storage.from("proof").upload(fileName, file, { upsert: true })
+    if (uploadError) { alert(`Upload error: ${uploadError.message}`); setUploadingMedia(false); return }
     const { data: urlData } = supabase.storage.from("proof").getPublicUrl(fileName)
     const isVideo = file.type.startsWith("video")
-    await supabase.from("community_messages").insert({
-      community_id: communityId, sender: ADMIN,
-      message: messageText.trim() || "",
-      media_url: urlData.publicUrl,
-      media_type: isVideo ? "video" : "image"
-    })
+    const { data, error } = await supabase.from("community_messages")
+      .insert({ community_id: communityId, sender: ADMIN,
+        message: messageText.trim() || "",
+        media_url: urlData.publicUrl,
+        media_type: isVideo ? "video" : "image" })
+      .select("*")
+      .single()
+
+    if (error) {
+      alert(`Error: ${error.message}`)
+      setUploadingMedia(false)
+      return
+    }
+
+    if (data) {
+      setCommunityMessages(prev => [...prev, data])
+    }
     setMessageText("")
-    await loadCommunityMessages(communityId)
     setUploadingMedia(false)
   }
 
@@ -408,6 +431,12 @@ export default function AdminDashboard() {
     return `${h}h ago`
   }
 
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+    }
+  }, [communityMessages])
+
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: "proofs", label: "Proofs", icon: "📎" },
     { key: "sessions", label: "Sessions", icon: "⚡" },
@@ -445,7 +474,7 @@ export default function AdminDashboard() {
                   {msg.sender.charAt(0).toUpperCase()}
                 </div>
                 <span className="text-cyan-400 text-sm font-bold">{msg.sender}</span>
-                <span className="bg-purple-500/20 border border-purple-500/40 text-purple-400 text-[9px] font-bold px-2 py-0.5 rounded-full">ADMIN</span>
+                <span className="bg-teal-500/20 border border-teal-500/30 text-teal-300 text-[9px] font-bold px-2 py-0.5 rounded-full">{postingAsMod ? "MOD" : "ADMIN"}</span>
                 <span className="text-zinc-600 text-xs ml-auto">{timeAgo(msg.created_at)}</span>
               </div>
               {msg.media_type === "video" && msg.media_url && (
@@ -457,8 +486,13 @@ export default function AdminDashboard() {
               {msg.message && <p className="text-zinc-200 text-sm">{msg.message}</p>}
             </div>
           ))}
+          <div ref={messagesEndRef} />
         </div>
-        <div className="border-t border-zinc-800 p-4 max-w-2xl mx-auto w-full flex-shrink-0">
+        <div className="border-t border-zinc-800 p-4 max-w-2xl mx-auto w-full flex-shrink-0 space-y-3">
+          <button type="button" onClick={() => setPostingAsMod(prev => !prev)}
+            className="w-full rounded-2xl bg-cyan-500/10 border border-cyan-500/20 px-4 py-3 text-sm font-semibold text-cyan-200 text-left">
+            Posting as {postingAsMod ? "Mod" : "Admin"} — tap to switch
+          </button>
           <div className="flex gap-3 items-center bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3">
             <label className="cursor-pointer text-zinc-400 hover:text-white flex-shrink-0">
               <span className="text-xl">{uploadingMedia ? "⏳" : "📎"}</span>
@@ -467,7 +501,7 @@ export default function AdminDashboard() {
             </label>
             <input value={messageText} onChange={e => setMessageText(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") sendMessage(activeCommunityChat.id) }}
-              placeholder="Send a message to this group..."
+              placeholder="Post an announcement…"
               className="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-zinc-600" />
             <button onClick={() => sendMessage(activeCommunityChat.id)}
               disabled={sendingMessage || !messageText.trim()}

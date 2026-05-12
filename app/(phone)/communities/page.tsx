@@ -87,11 +87,20 @@ export default function Communities() {
         table: "community_messages",
         filter: `community_id=eq.${activeCommunity.id}`
       }, (payload) => {
-        setMessages(prev => [...prev, payload.new as Message])
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === (payload.new as Message).id)
+          return exists ? prev : [...prev, payload.new as Message]
+        })
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [activeCommunity])
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+    }
+  }, [messages])
 
   async function loadCommunities() {
     const { data } = await supabase
@@ -200,18 +209,31 @@ export default function Communities() {
   }
 
   async function sendUserMessage(communityId: string) {
-    if (!userMessageText.trim()) return
+    const trimmed = userMessageText.trim()
+    if (!trimmed) return
     setUserSendingMessage(true)
-    await supabase.from("community_messages").insert({
-      community_id: communityId,
-      sender: user,
-      message: userMessageText.trim(),
-      media_type: "text",
-      is_announcement: false,
-      is_pinned: false
-    })
+    const { data, error } = await supabase.from("community_messages")
+      .insert({
+        community_id: communityId,
+        sender: user,
+        message: trimmed,
+        media_type: "text",
+        is_announcement: false,
+        is_pinned: false
+      })
+      .select("*")
+      .single()
+
+    if (error) {
+      alert(`Error: ${error.message}`)
+      setUserSendingMessage(false)
+      return
+    }
+
+    if (data) {
+      setMessages(prev => [...prev, data as Message])
+    }
     setUserMessageText("")
-    await loadMessages(communityId)
     setUserSendingMessage(false)
   }
 
@@ -219,21 +241,33 @@ export default function Communities() {
     setUserUploadingMedia(true)
     const ext = file.name.split(".").pop()
     const fileName = `community-${communityId}-${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from("proof").upload(fileName, file, { upsert: true })
-    if (error) { alert(`Upload error: ${error.message}`); setUserUploadingMedia(false); return }
+    const { error: uploadError } = await supabase.storage.from("proof").upload(fileName, file, { upsert: true })
+    if (uploadError) { alert(`Upload error: ${uploadError.message}`); setUserUploadingMedia(false); return }
     const { data: urlData } = supabase.storage.from("proof").getPublicUrl(fileName)
     const isVideo = file.type.startsWith("video")
-    await supabase.from("community_messages").insert({
-      community_id: communityId,
-      sender: user,
-      message: userMessageText.trim() || "",
-      media_url: urlData.publicUrl,
-      media_type: isVideo ? "video" : "image",
-      is_announcement: false,
-      is_pinned: false
-    })
+    const { data, error } = await supabase.from("community_messages")
+      .insert({
+        community_id: communityId,
+        sender: user,
+        message: userMessageText.trim() || "",
+        media_url: urlData.publicUrl,
+        media_type: isVideo ? "video" : "image",
+        is_announcement: false,
+        is_pinned: false
+      })
+      .select("*")
+      .single()
+
+    if (error) {
+      alert(`Error: ${error.message}`)
+      setUserUploadingMedia(false)
+      return
+    }
+
+    if (data) {
+      setMessages(prev => [...prev, data as Message])
+    }
     setUserMessageText("")
-    await loadMessages(communityId)
     setUserUploadingMedia(false)
   }
 
@@ -574,81 +608,88 @@ export default function Communities() {
           {filteredCommunities.map((community) => {
             const memberStatus = myMemberships[community.id]
             const isLinked = memberStatus === "accepted"
+            const initials = community.name.split(" ").map(word => word.charAt(0)).join("").slice(0, 2).toUpperCase()
 
             return (
-              <div key={community.id} style={{
-                background: "#18181b",
-                border: "1px solid rgba(255,255,255,0.07)",
-                borderRadius: 16, overflow: "hidden"
+              <div key={community.id} onClick={() => openCommunity(community)} style={{
+                background: "#111827",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 16, overflow: "hidden",
+                boxShadow: "0 12px 30px rgba(0,0,0,0.12)",
+                cursor: "pointer"
               }}>
-                {/* Background */}
-                {community.background_image && (
-                  <div style={{
-                    width: "100%", height: 120,
-                    background: "linear-gradient(135deg, rgba(180,0,255,0.2), rgba(0,212,255,0.1))",
-                    overflow: "hidden"
-                  }}>
-                    <img src={community.background_image} alt=""
+                <div style={{ position: "relative", width: "100%", height: 160, background: "#0f172a" }}>
+                  {community.background_image ? (
+                    <img src={community.background_image} alt="Community image"
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                       onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }} />
+                  ) : (
+                    <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #111827, #0f172a)" }} />
+                  )}
+                  <div style={{
+                    position: "absolute", top: 12, left: 12,
+                    width: 48, height: 48, borderRadius: 14,
+                    background: "linear-gradient(135deg, #8b5cf6, #00d9ff)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "white", fontWeight: 800, fontSize: 18,
+                    boxShadow: "0 8px 20px rgba(0,0,0,0.25)"
+                  }}>
+                    {initials}
                   </div>
-                )}
+                </div>
 
                 <div style={{ padding: 16 }}>
-                  {/* Avatar and Title */}
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
-                    <div style={{
-                      width: 48, height: 48, borderRadius: 12,
-                      background: "linear-gradient(135deg, #B400FF, #00D4FF)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 18, fontWeight: 900, color: "white", flexShrink: 0
-                    }}>
-                      {community.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <h3 style={{ fontWeight: "bold", color: "white", fontSize: 15, marginBottom: 2 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <h3 style={{ fontSize: 17, fontWeight: 800, color: "white", marginBottom: 4, lineHeight: 1.2 }}>
                         {community.name}
                       </h3>
-                      <p style={{ color: "#00D4FF", fontSize: 12, fontWeight: 600 }}>
-                        {community.institution}
+                      <p style={{ color: "#00D9FF", fontSize: 12, marginTop: 2, fontWeight: 700 }}>
+                        {community.category || community.institution || "Community"}
                       </p>
+                    </div>
+                    <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11 }}>
+                      {community.location || community.institution || "Unknown"}
                     </div>
                   </div>
 
-                  {/* Description */}
                   {community.description && (
-                    <p style={{
-                      color: "rgba(255,255,255,0.6)", fontSize: 12, lineHeight: 1.4,
-                      marginBottom: 10
-                    }}>
+                    <p style={{ color: "rgba(255,255,255,0.65)", fontSize: 13, lineHeight: 1.5, marginBottom: 12, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {community.description}
                     </p>
                   )}
 
-                  {/* Stats */}
                   <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                    gap: 10,
                     background: "rgba(255,255,255,0.04)",
                     border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: 10, padding: "8px 10px",
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    fontSize: 11, color: "rgba(255,255,255,0.6)", marginBottom: 10
+                    borderRadius: 14,
+                    padding: 12,
+                    marginBottom: 14
                   }}>
-                    <span><strong style={{ color: "#00D4FF" }}>{community.link_count}</strong> links</span>
-                    <span style={{ color: "rgba(255,255,255,0.2)" }}>•</span>
-                    <span><strong style={{ color: "#B400FF" }}>{community.post_count}</strong> posts</span>
-                    <span style={{ color: "rgba(255,255,255,0.2)" }}>•</span>
-                    <span><strong style={{ color: "#FFA500" }}>{Math.round(community.total_lp / 1000)}k</strong> LP</span>
+                    <div style={{ textAlign: "center" }}>
+                      <p style={{ color: "#00D9FF", fontWeight: 700, fontSize: 12 }}>{community.link_count || 0}</p>
+                      <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 10, marginTop: 2 }}>Links</p>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <p style={{ color: "white", fontWeight: 700, fontSize: 12 }}>{community.post_count || 0}</p>
+                      <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 10, marginTop: 2 }}>Posts</p>
+                    </div>
+                    <div style={{ textAlign: "center" }}>
+                      <p style={{ color: "#FBBF24", fontWeight: 700, fontSize: 12 }}>{community.total_lp ? Math.round(community.total_lp / 1000) : 0}k</p>
+                      <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 10, marginTop: 2 }}>LP</p>
+                    </div>
                   </div>
 
-                  {/* Action Button */}
                   {!isLinked && !memberStatus && (
                     <button onClick={() => linkCommunity(community.id)} disabled={loading}
                       style={{
-                        width: "100%", padding: "10px 12px",
-                        background: "#00D4FF",
-                        border: "none", borderRadius: 10,
-                        color: "black",
-                        fontSize: 13, fontWeight: 700, cursor: "pointer"
+                        width: "100%", padding: "12px 14px",
+                        background: "linear-gradient(135deg, #8b5cf6, #00d9ff)",
+                        border: "none", borderRadius: 14,
+                        color: "white", fontSize: 14, fontWeight: 800, cursor: "pointer"
                       }}>
                       🔗 Link
                     </button>
@@ -656,22 +697,21 @@ export default function Communities() {
                   {isLinked && (
                     <button onClick={() => openCommunity(community)}
                       style={{
-                        width: "100%", padding: "10px 12px",
-                        background: "linear-gradient(135deg, #B400FF, #00D4FF)",
-                        border: "none", borderRadius: 10,
-                        color: "white",
-                        fontSize: 13, fontWeight: 700, cursor: "pointer"
+                        width: "100%", padding: "12px 14px",
+                        background: "linear-gradient(135deg, #8b5cf6, #00d9ff)",
+                        border: "none", borderRadius: 14,
+                        color: "white", fontSize: 14, fontWeight: 800, cursor: "pointer"
                       }}>
                       Open Community
                     </button>
                   )}
                   {memberStatus && memberStatus !== "accepted" && (
                     <button disabled style={{
-                      width: "100%", padding: "10px 12px",
+                      width: "100%", padding: "12px 14px",
                       background: "rgba(255,255,255,0.08)",
-                      border: "none", borderRadius: 10,
-                      color: "rgba(255,255,255,0.3)",
-                      fontSize: 13, fontWeight: 700
+                      border: "none", borderRadius: 14,
+                      color: "rgba(255,255,255,0.45)",
+                      fontSize: 14, fontWeight: 700
                     }}>
                       {memberStatus === "pending" ? "⏳ Pending" : "✓ Linked"}
                     </button>
