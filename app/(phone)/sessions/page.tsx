@@ -24,7 +24,17 @@ function SessionsContent() {
     "🏆 Be the first to top the leaderboard!",
     "🌍 Complete a session and share it to the Hub",
   ])
+  const [searchTerm, setSearchTerm] = useState("")
+  const [searchOpen, setSearchOpen] = useState(false)
   const sessionRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  
+  const filteredSessions = sessions.filter((session) => {
+    if (!searchTerm.trim()) return true
+    const query = searchTerm.trim().toLowerCase()
+    return [session.title, session.category, session.creator, session.type]
+      .filter(Boolean)
+      .some((value) => value?.toLowerCase().includes(query))
+  })
 
   useEffect(() => {
     const u = getUser() || ""
@@ -184,9 +194,33 @@ function SessionsContent() {
     <div className="flex flex-col h-full bg-black text-white">
 
       {/* HEADER */}
-      <div className="flex-shrink-0 p-4 pb-2 flex items-center justify-between">
+      <div className="flex-shrink-0 p-4 pb-2 flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-cyan-400">Sessions</h1>
-        <NotificationBell />
+        <div className="flex items-center gap-2">
+          {searchOpen && (
+            <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 rounded-full px-3 py-1">
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search sessions..."
+                className="bg-transparent outline-none text-white text-sm w-40"
+              />
+              <button
+                onClick={() => setSearchOpen(false)}
+                className="text-zinc-400 text-sm px-2"
+              >
+                Done
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => setSearchOpen((prev) => !prev)}
+            className="text-zinc-300 p-2 rounded-full bg-zinc-900/80 hover:bg-zinc-800 transition-colors"
+          >
+            🔍
+          </button>
+          <NotificationBell />
+        </div>
       </div>
 
       {/* TABS */}
@@ -234,7 +268,15 @@ function SessionsContent() {
             </div>
           )}
 
-          {sessions.map((session) => {
+          {sessions.length > 0 && filteredSessions.length === 0 && (
+            <div className="text-center py-16">
+              <p className="text-4xl mb-3">🔎</p>
+              <p className="text-zinc-500 text-sm">No sessions match your search</p>
+              <p className="text-zinc-700 text-xs mt-1">Try a different title, category, or creator.</p>
+            </div>
+          )}
+
+          {filteredSessions.map((session) => {
             const attempt = attempts[session.id]
             const hasAttempt = !!attempt
             const isSubmitted = attempt?.status === "submitted"

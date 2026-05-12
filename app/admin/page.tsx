@@ -712,8 +712,11 @@ export default function AdminDashboard() {
                 <input placeholder="Community name" value={newCommunity.name}
                   onChange={e => setNewCommunity(p => ({ ...p, name: e.target.value }))}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
-                <input placeholder="Description (optional)" value={newCommunity.description}
-                  onChange={e => setNewCommunity(p => ({ ...p, description: e.target.value }))}  
+                <label className="text-zinc-400 text-sm font-semibold">About this community</label>
+                <textarea placeholder="Tell people what this community does..."
+                  value={newCommunity.description}
+                  onChange={e => setNewCommunity(p => ({ ...p, description: e.target.value }))}
+                  rows={3}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-zinc-600 focus:outline-none focus:border-cyan-400" />
                 <div className="flex items-center gap-3 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3">
                   <input type="checkbox" id="isPrivate" checked={newCommunity.is_private}

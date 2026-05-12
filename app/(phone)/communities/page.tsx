@@ -248,6 +248,14 @@ export default function Communities() {
     return `${d}d`
   }
 
+  const filteredCommunities = communities.filter((community) => {
+    if (!searchQuery.trim()) return true
+    const query = searchQuery.trim().toLowerCase()
+    return [community.name, community.description, community.institution, community.location]
+      .filter(Boolean)
+      .some((value) => value?.toLowerCase().includes(query))
+  })
+
   if (activeCommunity) {
     const totalLP = communityLeaderboard.reduce((sum, u) => sum + u.points, 0)
 
@@ -429,15 +437,6 @@ export default function Communities() {
                   )}
 
                   {/* Engagement */}
-                  <div style={{
-                    display: "flex", alignItems: "center", gap: 16, fontSize: 12,
-                    color: "rgba(255,255,255,0.5)", paddingTop: 10,
-                    borderTop: "1px solid rgba(255,255,255,0.05)"
-                  }}>
-                    <span style={{ cursor: "pointer" }}>❤️ 248</span>
-                    <span style={{ cursor: "pointer" }}>💬 42</span>
-                    <span style={{ cursor: "pointer" }}>🔗 Share</span>
-                  </div>
                 </div>
               ))}
               <div ref={messagesEndRef} />
@@ -565,7 +564,14 @@ export default function Communities() {
             </div>
           )}
 
-          {communities.map((community) => {
+          {communities.length > 0 && filteredCommunities.length === 0 && (
+            <div style={{ textAlign: "center", padding: "40px 0" }}>
+              <p style={{ fontSize: 32, marginBottom: 8 }}>🔎</p>
+              <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>No communities match your search</p>
+            </div>
+          )}
+
+          {filteredCommunities.map((community) => {
             const memberStatus = myMemberships[community.id]
             const isLinked = memberStatus === "accepted"
 
