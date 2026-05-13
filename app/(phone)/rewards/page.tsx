@@ -24,6 +24,7 @@ export default function Rewards() {
   const [sessionCount, setSessionCount] = useState(0)
   const [rewards, setRewards] = useState<Reward[]>([])
   const [claimed, setClaimed] = useState<string[]>([])
+  const [claimedRewardData, setClaimedRewardData] = useState<Reward[]>([])
   const [claiming, setClaiming] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -48,49 +49,52 @@ export default function Rewards() {
     if (sc !== null) setSessionCount(sc)
 
     const { data: rewardsData } = await supabase
-      .from("rewards").select("*").order("points_required", { ascending: true }).limit(25)
-    if (rewardsData) {
-      const sorted = rewardsData.sort((a, b) => {
-        // Incomplete rewards at top
-        const aIncomplete = !a.business_name?.trim() || (a.reward_type === "voucher" && !a.voucher_code?.trim())
-        const bIncomplete = !b.business_name?.trim() || (b.reward_type === "voucher" && !b.voucher_code?.trim())
-        if (aIncomplete && !bIncomplete) return -1
-        if (!aIncomplete && bIncomplete) return 1
-        return a.points_required - b.points_required
-      })
-      setRewards(sorted)
-    }
+      .from("rewards").select("*").order("points_required", { ascending: true }).limit(50)
+    
+    // Combine session achievements with LP rewards
+    const allRewards: Reward[] = [
+      ...sessionAchievements.map(a => ({
+        id: a.id,
+        title: a.title,
+        points_required: 0,
+        description: a.description,
+        icon: "🏅",
+        reward_type: "achievement",
+        active: true
+      })),
+      ...(rewardsData || [])
+    ]
+    setRewards(allRewards)
 
     const { data: claimedData } = await supabase
       .from("user_rewards").select("reward_id").eq("user_name", user)
-    if (claimedData) setClaimed(claimedData.map(r => r.reward_id))
+    if (claimedData) {
+      const claimedIds = claimedData.map(r => r.reward_id)
+      setClaimed(claimedIds)
+      const claimedRewards = allRewards.filter(r => claimedIds.includes(r.id)).slice(0, 3)
+      setClaimedRewardData(claimedRewards)
+    }
 
     setLoading(false)
   }
 
-  async function claimReward(rewardId: string, cost: number) {
+  async function claimReward(rewardId: string, cost: number = 0) {
     setClaiming(rewardId)
     const alreadyClaimed = claimed.includes(rewardId)
     if (alreadyClaimed) { setClaiming(null); return }
 
-    const { data: userData } = await supabase
-      .from("leaderboard").select("points").eq("user_name", user)
-      .order("points", { ascending: false }).limit(1).maybeSingle()
-    if (!userData) { setClaiming(null); return }
-    if (userData.points < cost) {
-      alert("Not enough LP to claim this reward.")
-      setClaiming(null)
-      return
+    if (cost > 0) {
+      const { data: userData } = await supabase
+        .from("leaderboard").select("points").eq("user_name", user)
+        .order("points", { ascending: false }).limit(1).maybeSingle()
+      if (!userData) { setClaiming(null); return }
+      if (userData.points < cost) {
+        setClaiming(null)
+        return
+      }
+      await supabase.from("leaderboard").update({ points: userData.points - cost }).eq("user_name", user)
     }
 
-    await supabase.from("leaderboard").update({ points: userData.points - cost }).eq("user_name", user)
-    await supabase.from("user_rewards").insert({ user_name: user, reward_id: rewardId })
-    await loadData()
-    setClaiming(null)
-  }
-
-  async function claimSessionReward(rewardId: string) {
-    setClaiming(rewardId)
     await supabase.from("user_rewards").insert({ user_name: user, reward_id: rewardId })
     await loadData()
     setClaiming(null)
@@ -138,10 +142,6 @@ export default function Rewards() {
 
 
   const claimedCount = claimed.length
-  const nextReward = rewards.find(r => !claimed.includes(r.id))
-  const progressToNext = nextReward
-    ? Math.min((points / nextReward.points_required) * 100, 100)
-    : 100
 
   // 3D Verified Badge SVG component
   function VerifiedBadge({ size = 52, earned = false }: { size?: number; earned?: boolean }) {
@@ -236,15 +236,30 @@ export default function Rewards() {
             <h1 className="text-2xl font-bold text-cyan-400 mb-1">Rewards</h1>
             <p className="text-zinc-500 text-xs mb-3">Earn status. Get recognised. Prove yourself IRL.</p>
 
-            {/* LP CARD */}
+            {/* LP CARD WITH CLAIMED REWARDS */}
             <div className="rounded-[32px] bg-gradient-to-br from-slate-900 via-zinc-950 to-slate-900 border border-white/10 p-4 shadow-[0_24px_60px_rgba(0,0,0,0.25)]">
-              <p className="text-zinc-400 text-[9px] uppercase tracking-[0.3em] mb-1.5">Your LinkPoints</p>
-              <span className="text-4xl font-black text-white block mb-0.5"
+              <p className="text-zinc-400 text-[9px] uppercase tracking-[0.3em] mb-1.5 text-center">Your LinkPoints</p>
+              <span className="text-5xl font-black text-white block mb-0.5 text-center"
                 style={{ textShadow: "0 0 20px rgba(0,212,255,0.3)" }}>
                 {points}
               </span>
-              <span className="text-cyan-400 font-bold text-base">LP</span>
+              <span className="text-cyan-400 font-bold text-base block text-center">LP</span>
               <div className="w-12 h-[2px] bg-gradient-to-r from-purple-500 to-cyan-400 mx-auto my-2.5 rounded-full" />
+              
+              {/* Claimed Rewards Display (up to 3) */}
+              {claimedRewardData.length > 0 && (
+                <div className="flex items-center justify-center gap-3 mb-3">
+                  {claimedRewardData.map((reward, idx) => (
+                    <div key={idx} className="flex flex-col items-center gap-1">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-lg">
+                        {reward.icon || "🏅"}
+                      </div>
+                      <p className="text-[9px] text-zinc-400 text-center w-14 truncate">{reward.title.split(" ")[0]}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="grid grid-cols-3 gap-2 text-center mb-2.5">
                 <div>
                   <p className="text-sm font-bold text-green-400">{claimedCount}</p>
@@ -252,65 +267,68 @@ export default function Rewards() {
                 </div>
                 <div className="h-6 border-l border-zinc-700" />
                 <div>
-                  <p className="text-sm font-bold text-cyan-400">{sessionCount}</p>
-                  <p className="text-zinc-500 text-[10px] uppercase tracking-[0.15em]">Sessions</p>
-                </div>
-                <div className="h-6 border-l border-zinc-700" />
-                <div>
                   <p className="text-sm font-bold text-purple-400">{rewards.length}</p>
-                  <p className="text-zinc-500 text-[10px] uppercase tracking-[0.15em]">Rewards</p>
+                  <p className="text-zinc-500 text-[10px] uppercase tracking-[0.15em]">Total</p>
                 </div>
               </div>
-              {!loading && nextReward && (
-                <div>
-                  <div className="flex justify-between text-xs text-zinc-500 mb-1.5">
-                    <span>Next: <span className="text-white font-semibold">{nextReward.title}</span></span>
-                    <span>{points}/{nextReward.points_required} LP</span>
-                  </div>
-                  <div className="w-full bg-zinc-800 rounded-full h-2">
-                    <div className="bg-gradient-to-r from-purple-500 to-cyan-400 h-2 rounded-full transition-all duration-700"
-                      style={{ width: `${progressToNext}%` }} />
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
+          {/* ALL REWARDS SECTION */}
           <div>
-            <div className="flex items-center gap-2 mb-4 mt-2">
-              <div className="h-px flex-1 bg-zinc-800" />
-              <p className="text-zinc-400 text-xs uppercase tracking-widest font-bold px-2">Achievements</p>
-              <div className="h-px flex-1 bg-zinc-800" />
-            </div>
+          <div className="flex items-center gap-2 mb-4 mt-2">
+            <div className="h-px flex-1 bg-zinc-800" />
+            <p className="text-zinc-400 text-xs uppercase tracking-widest font-bold px-2">All Rewards</p>
+            <div className="h-px flex-1 bg-zinc-800" />
+          </div>
 
           <div className="space-y-4">
-            {sessionAchievements.map((a) => {
-              const isClaimed = claimed.includes(a.id)
-              const unlocked = sessionCount >= a.sessions
+            {rewards.map((reward) => {
+              const isClaimed = claimed.includes(reward.id)
+              
+              // Check unlock condition
+              let unlocked = false
+              let unlockReason = ""
+              
+              if (reward.reward_type === "achievement") {
+                // Session-based achievement
+                const achievement = sessionAchievements.find(a => a.id === reward.id)
+                if (achievement) {
+                  unlocked = sessionCount >= achievement.sessions
+                  unlockReason = `${Math.max(0, achievement.sessions - sessionCount)} more sessions`
+                }
+              } else {
+                // LP-based reward
+                unlocked = points >= reward.points_required
+                unlockReason = "Not enough LP"
+              }
+
               const canClaim = unlocked && !isClaimed
-              const progress = Math.min((sessionCount / a.sessions) * 100, 100)
+              const isClaiming = claiming === reward.id
 
               return (
-                <div key={a.id} className="overflow-hidden rounded-[28px] border border-zinc-700/50 shadow-[0_20px_80px_rgba(0,0,0,0.25)] bg-gradient-to-br from-zinc-900/80 via-zinc-800/60 to-zinc-900/80">
+                <div key={reward.id} className="overflow-hidden rounded-[28px] border border-zinc-700/50 shadow-[0_20px_80px_rgba(0,0,0,0.25)] bg-gradient-to-br from-zinc-900/80 via-zinc-800/60 to-zinc-900/80">
                   <div className="relative h-40">
                     <div className="h-full w-full bg-gradient-to-br from-purple-900/40 via-zinc-900/50 to-cyan-900/40" />
                     <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/90 via-zinc-900/50 to-transparent" />
                     <div className="absolute top-4 left-4 rounded-full bg-black/40 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
-                      Achievement
+                      {reward.reward_type === "achievement" ? "Achievement" : "Reward"}
                     </div>
-                    <div className="absolute top-4 right-4 rounded-full bg-white/10 border border-white/10 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
-                      {a.sessions} Sessions
-                    </div>
-                    {isClaimed && a.isVerified && (
-                      <div className="absolute left-4 bottom-16 rounded-2xl bg-cyan-500/20 border border-cyan-400/30 px-3 py-1.5 text-[10px] font-semibold text-cyan-200 backdrop-blur-sm">
-                        FOUNDING MEMBER
+                    {reward.points_required > 0 && (
+                      <div className="absolute top-4 right-4 rounded-full bg-white/10 border border-white/10 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm">
+                        {reward.points_required} LP
+                      </div>
+                    )}
+                    {isClaimed && (
+                      <div className="absolute left-4 bottom-16 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 px-3 py-1.5 text-[10px] font-semibold text-emerald-200 backdrop-blur-sm">
+                        ✓ EARNED
                       </div>
                     )}
                   </div>
                   <div className="p-4 pb-4">
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <p className="text-zinc-400 text-xs uppercase tracking-[0.2em] font-semibold">
-                        SESSION MILESTONE
+                        {reward.reward_type === "achievement" ? "ACHIEVEMENT" : "REWARD"}
                       </p>
                       {isClaimed ? (
                         <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-[11px] font-bold text-emerald-300 border border-emerald-500/30">
@@ -322,46 +340,37 @@ export default function Rewards() {
                         </span>
                       ) : (
                         <span className="rounded-full bg-zinc-700/60 px-3 py-1 text-[11px] font-bold text-zinc-300 border border-zinc-600/50">
-                          {a.sessions - sessionCount} MORE
+                          {unlockReason}
                         </span>
                       )}
                     </div>
                     <h2 className="text-lg font-bold text-white leading-tight mb-2">
-                      {a.title}
+                      {reward.title}
                     </h2>
                     <p className="text-zinc-300 text-sm leading-5 mb-3">
-                      {a.description}
+                      {reward.description}
                     </p>
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="flex-1 bg-zinc-700/50 rounded-full h-2">
-                        <div className={`h-2 rounded-full transition-all duration-700 ${
-                          isClaimed ? 'bg-gradient-to-r from-emerald-500 to-cyan-400' :
-                          unlocked ? 'bg-gradient-to-r from-purple-500 to-cyan-400' :
-                          'bg-gradient-to-r from-zinc-600 to-zinc-500'
-                        }`} style={{ width: `${progress}%` }} />
-                      </div>
-                      <span className="text-xs font-semibold text-zinc-400">
-                        {Math.min(sessionCount, a.sessions)}/{a.sessions}
-                      </span>
-                    </div>
                     <div className="flex justify-center">
                       {isClaimed ? (
                         <div className="flex items-center gap-2 text-emerald-400">
                           <VerifiedBadge size={32} earned={true} />
                           <span className="text-sm font-bold">Earned ✓</span>
                         </div>
-                      ) : canClaim ? (
+                      ) : unlocked ? (
                         <button
-                          onClick={() => claimSessionReward(a.id)}
-                          disabled={claiming === a.id}
+                          onClick={() => claimReward(reward.id, reward.points_required)}
+                          disabled={isClaiming}
                           className="bg-gradient-to-r from-purple-500 to-cyan-400 text-zinc-950 px-6 py-2.5 rounded-full text-sm font-bold shadow-[0_8px_25px_rgba(180,0,255,0.3)] hover:opacity-95 transition-opacity"
                         >
-                          {claiming === a.id ? "Claiming..." : "Claim Now"}
+                          {isClaiming ? "Claiming..." : "Claim"}
                         </button>
                       ) : (
-                        <p className="text-zinc-500 text-sm">
-                          Complete {a.sessions - sessionCount} more sessions
-                        </p>
+                        <button
+                          disabled
+                          className="bg-zinc-800/50 text-zinc-500 px-6 py-2.5 rounded-full text-sm font-bold cursor-not-allowed"
+                        >
+                          {unlockReason}
+                        </button>
                       )}
                     </div>
                   </div>
@@ -370,91 +379,7 @@ export default function Rewards() {
             })}
           </div>
         </div>
-
-
-        {/* ── SECTION 3: LP REWARDS ── */}
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="h-px flex-1 bg-zinc-800" />
-            <p className="text-zinc-400 text-xs uppercase tracking-widest font-bold px-2">LP Rewards</p>
-            <div className="h-px flex-1 bg-zinc-800" />
-          </div>
-          <p className="text-zinc-700 text-xs text-center mb-4">Spend your LinkPoints to claim these</p>
-
-          <div className="space-y-4">
-            {rewards.length === 0 && !loading ? (
-              <div className="text-center py-16">
-                <p className="text-zinc-400 text-sm">No LP rewards added yet.</p>
-                <p className="text-zinc-600 text-xs mt-2">Your admin will add these soon.</p>
-              </div>
-            ) : (
-              rewards.map((reward) => {
-                const isClaimed = claimed.includes(reward.id)
-                const unlocked = points >= reward.points_required
-                const isClaiming = claiming === reward.id
-                const lpAway = Math.max(reward.points_required - points, 0)
-
-                return (
-                  <div key={reward.id} className="overflow-hidden rounded-[32px] border border-white/10 shadow-[0_30px_90px_rgba(0,0,0,0.24)] bg-zinc-950">
-                    <div className="relative h-52 overflow-hidden">
-                      {reward.image_url ? (
-                        <img src={reward.image_url} alt={reward.title}
-                          className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="h-full w-full bg-gradient-to-br from-slate-900 via-zinc-950 to-slate-800" />
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/95 via-zinc-950/20 to-transparent" />
-                      <div className="absolute top-4 left-4 rounded-full bg-black/70 border border-white/10 px-3 py-1.5 text-[11px] font-semibold text-white backdrop-blur-sm">
-                        {reward.business_name || "Local Reward"}
-                      </div>
-                      <div className="absolute top-4 right-4 rounded-full bg-white/10 border border-white/15 px-3 py-1.5 text-xs font-bold text-white">
-                        {reward.points_required} LP
-                      </div>
-                      <div className="absolute inset-x-4 bottom-4 rounded-[26px] bg-black/75 border border-white/10 p-4 backdrop-blur-md">
-                        <p className="text-[11px] uppercase tracking-[0.35em] text-cyan-300 mb-2">
-                          {reward.reward_type ? reward.reward_type.toUpperCase() : "REWARD"}
-                        </p>
-                        <h2 className="text-2xl font-bold text-white leading-tight mb-2">
-                          {reward.title}
-                        </h2>
-                        {reward.description && (
-                          <p className="text-zinc-300 text-sm leading-6 mb-4">
-                            {reward.description}
-                          </p>
-                        )}
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <button
-                            onClick={() => claimReward(reward.id, reward.points_required)}
-                            disabled={!unlocked || isClaiming || isClaimed}
-                            className={`w-full sm:w-auto rounded-full px-6 py-3 text-sm font-bold transition ${
-                              isClaimed
-                                ? "bg-zinc-800 text-zinc-400 cursor-default"
-                                : unlocked
-                                  ? "bg-gradient-to-r from-purple-500 to-cyan-400 text-zinc-950 shadow-[0_16px_40px_rgba(180,0,255,0.3)] hover:opacity-95"
-                                  : "bg-white/5 text-zinc-400 cursor-not-allowed"
-                            }`}
-                          >
-                            {isClaiming ? "Claiming..." : isClaimed ? "Already claimed" : "Claim Now"}
-                          </button>
-                          <div className="flex items-center gap-2 text-xs text-zinc-300">
-                            <span className="rounded-full bg-white/10 px-2 py-1">{reward.business_name || "IRL Shop"}</span>
-                            {reward.created_by && (
-                              <span className="text-zinc-500">•</span>
-                            )}
-                            {reward.created_by && (
-                              <span>{`Posted by ${reward.created_by}`}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })
-            )}
-          </div>
         </div>
-      </div>
       </div>
 
       <BottomNav />
