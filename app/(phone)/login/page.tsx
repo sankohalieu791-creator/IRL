@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { saveToStorage } from "@/lib/auth"
+import { saveToStorage, getUser } from "@/lib/auth"
 
 type Institution = { id: string; name: string; type: string }
 
@@ -20,7 +20,15 @@ export default function LoginPage() {
   const [search, setSearch] = useState("")
   const [showDropdown, setShowDropdown] = useState(false)
 
-  useEffect(() => { loadInstitutions() }, [])
+  useEffect(() => {
+    // Check if user is already logged in
+    const user = getUser()
+    if (user) {
+      router.replace("/sessions")
+      return
+    }
+    loadInstitutions()
+  }, [])
 
   async function loadInstitutions() {
     const { data } = await supabase.from("institutions").select("*").order("name", { ascending: true })
