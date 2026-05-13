@@ -49,11 +49,17 @@ export default function Rewards() {
 
     const { data: rewardsData } = await supabase
       .from("rewards").select("*").order("points_required", { ascending: true }).limit(25)
-    if (rewardsData) setRewards(rewardsData.filter((r) =>
-      r.active !== false &&
-      r.business_name?.trim() &&
-      (r.reward_type !== "voucher" || (r.voucher_code && r.voucher_code.trim()))
-    ))
+    if (rewardsData) {
+      const sorted = rewardsData.sort((a, b) => {
+        // Incomplete rewards at top
+        const aIncomplete = !a.business_name?.trim() || (a.reward_type === "voucher" && !a.voucher_code?.trim())
+        const bIncomplete = !b.business_name?.trim() || (b.reward_type === "voucher" && !b.voucher_code?.trim())
+        if (aIncomplete && !bIncomplete) return -1
+        if (!aIncomplete && bIncomplete) return 1
+        return a.points_required - b.points_required
+      })
+      setRewards(sorted)
+    }
 
     const { data: claimedData } = await supabase
       .from("user_rewards").select("reward_id").eq("user_name", user)
