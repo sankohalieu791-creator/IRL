@@ -3,6 +3,7 @@ import { Analytics } from "@vercel/analytics/react"
 // @ts-ignore: CSS import handled by Next.js
 import "./globals.css"
 import AuthGuard from "@/components/AuthGuard"
+import { Analytics } from "@vercel/analytics/next"
 
 export const viewport: Viewport = {
   width: "device-width",
